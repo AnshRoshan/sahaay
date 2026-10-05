@@ -5,13 +5,12 @@ import { and, eq, gt, lte, sql } from "drizzle-orm";
 import { addDays, diffDays, weekdayOf } from "@/lib/dates";
 import { poisson, rng, WEEKDAY_DEMAND } from "@/lib/demo-data";
 import type { LedgerEvent } from "@/lib/ledger";
+import { classifyOutcome, type OutcomeVerdict } from "@/lib/outcomes-core";
 import { getAsOf } from "./engine";
 import { appendEvents } from "./ledger";
 import { relearn } from "./memory";
 
-export type OutcomeVerdict = "close" | "overestimated" | "underestimated" | "avoided_risk" | "risk_realised" | "reasonable";
-
-const u = (n: number) => `${n} unit${n === 1 ? "" : "s"}`;
+export type { OutcomeVerdict };
 
 export async function measureOutcomes(): Promise<{ measured: number; pending: number }> {
   const asOf = await getAsOf();
@@ -38,46 +37,29 @@ export async function measureOutcomes(): Promise<{ measured: number; pending: nu
       .where(and(eq(s.sales.productId, d.productId), gt(s.sales.saleDate, from), lte(s.sales.saleDate, to)));
     const actual = Number(r[0]?.q ?? 0);
     const forecast = Math.round((d.forecastDailyRate ?? 0) * window * 10) / 10;
-    const err = forecast > 0 ? (actual - forecast) / forecast : 0;
     const name = names.get(d.productId) ?? d.productId;
     const stockAtDecision = d.stockAtDecision ?? 0;
     const rec = d.recommendedQty ?? 0;
     const appr = d.approvedQty;
 
-    let verdict: OutcomeVerdict;
-    const parts: string[] = [];
-    parts.push(`Actual demand over ${window} days: ${u(actual)} (forecast ${forecast}, ${err >= 0 ? "+" : ""}${Math.round(err * 100)}%).`);
-
-    if (d.kind === "rejected") {
-      const short = actual - stockAtDecision;
-      if (short > 0) {
-        verdict = "risk_realised";
-        parts.push(`You declined the order. On-hand stock was ${stockAtDecision}, so demand exceeded stock by ${u(short)} — the stockout risk was real.`);
-      } else {
-        verdict = "avoided_risk";
-        parts.push(`You declined the order. On-hand stock was ${stockAtDecision}, which covered the ${u(actual)} sold — rejecting looks reasonable.`);
-      }
-    } else {
-      const ordered = appr ?? rec;
-      const needed = Math.max(0, actual - stockAtDecision);
-      if (Math.abs(err) <= 0.2) verdict = "close";
-      else verdict = err < 0 ? "overestimated" : "underestimated";
-      if (d.kind === "modified" && appr !== null && appr !== rec) {
-        const closerYou = Math.abs(ordered - needed) <= Math.abs(rec - needed);
-        parts.push(`You changed the order from ${rec} to ${appr}. The net units actually needed in this window were about ${needed}. ${closerYou ? "Your adjustment was closer to what was needed." : "My original suggestion was closer to what was needed."}`);
-        if (closerYou && verdict !== "close") verdict = "reasonable";
-      } else {
-        parts.push(`You ordered ${ordered}; about ${needed} net unit(s) were needed in the window.`);
-      }
-      if (verdict === "close") parts.push("✓ The demand estimate was close.");
-      else if (verdict === "overestimated") parts.push("⚠ The forecast overestimated demand.");
-      else if (verdict === "underestimated") parts.push("⚠ The forecast underestimated demand.");
-    }
+    const cls = classifyOutcome({
+      kind: d.kind as "approved" | "modified" | "rejected",
+      actualSold: actual,
+      forecastDemand: forecast,
+      stockAtDecision,
+      recommendedQty: rec,
+      approvedQty: appr,
+      windowDays: window,
+    });
+    const { verdict, parts } = cls;
     await db.insert(s.outcomes).values({
       decisionId: d.id, recommendationId: d.recommendationId, productId: d.productId,
       actualDemand: actual, forecastDemand: forecast, windowDays: window, verdict,
       note: `${name}: ${parts.join(" ")}`,
-      details: { from, to, errorPct: Math.round(err * 100), recommended: rec, approved: appr, stockAtDecision },
+      details: {
+        from, to, errorPct: cls.errorPct, recommended: rec, approved: appr, stockAtDecision,
+        supplyCap: cls.supplyCap, needed: cls.needed, censored: cls.censored,
+      },
     });
     const [recRow] = await db.select().from(s.recommendations).where(eq(s.recommendations.id, d.recommendationId));
     if (recRow && !recRow.lifecycle.some((l) => l.stage === "OUTCOME_RECORDED"))

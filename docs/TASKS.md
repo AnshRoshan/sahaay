@@ -33,10 +33,13 @@
 - [x] Order draft + executed marker
 
 ## Phase 5 — Outcome loop
-- [x] Outcome measurement + verdicts
+- [x] Outcome measurement + verdicts — **censored windows (stock fully sold) now yield `indeterminate`
+      instead of a verdict, and are excluded from forecast-bias learning** (`src/lib/outcomes-core.ts`)
 - [x] Preference learning
 - [x] Time-machine simulation for demo
 - [ ] Tune verdict thresholds with real outcomes after 4+ weeks of use
+- [ ] Risk bands (`SAFE/WATCH/HIGH/CRITICAL` cut points) are hard-coded and global — expose them as
+      rules, then tune only once a band's Wilson interval excludes its target at n ≥ 25 per band
 
 ## Phase 5b — Event ledger, claim verification, simulation
 - [x] Append-only `ledger_events` + deterministic reducer with balance trail (`src/lib/ledger.ts`)

@@ -67,7 +67,7 @@ Legend: ✅ implemented and exercised in the build sandbox · 🔌 adapter imple
 | D4 | "I placed this order" (EXECUTED) | ✅ |
 | D5 | Decision lifecycle visible in UI | ✅ |
 | D6 | Decision history: recommended vs human vs outcome | ✅ |
-| D7 | Outcome monitoring: actual vs forecast, verdicts, comparison of owner's edit vs recommendation, counterfactual for rejections | ✅ |
+| D7 | Outcome monitoring: actual vs forecast, verdicts, comparison of owner's edit vs recommendation. Windows where the available stock all sold are **censored** (recorded sales understate demand), so those get an `indeterminate` verdict and are excluded from forecast-bias learning | ✅ `outcomes-core.ts` |
 | D8 | Preference learning (order-size ratio, reason themes, forecast bias) → shown, only influences alternatives | ✅ |
 | D9 | North-star metrics (decisions with measurable outcomes) | ✅ |
 | D10 | Demo time-machine (simulate N days, deliveries, outcome measurement) | ✅ (SIMULATION) |

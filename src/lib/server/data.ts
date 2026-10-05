@@ -63,12 +63,14 @@ export async function getNorthStar() {
   const real = recs.filter((r) => r.status !== "expired");
   const accepted = decs.filter((d) => d.kind !== "rejected").length;
   const positive = outs.filter((o) => ["close", "reasonable", "avoided_risk"].includes(o.verdict)).length;
+  const indeterminate = outs.filter((o) => o.verdict === "indeterminate").length;
   return {
     recommendations: real.length,
     decided: decs.length,
     approved: accepted,
     rejected: decs.length - accepted,
     measurable: outs.length,
+    indeterminate,
     positive,
   };
 }

@@ -5,7 +5,7 @@ import { getHistory, getNorthStar } from "@/lib/server/data";
 
 export const dynamic = "force-dynamic";
 
-const verdictStyle: Record<string, string> = { close: "bg-emerald-50 text-emerald-700", reasonable: "bg-emerald-50 text-emerald-700", avoided_risk: "bg-emerald-50 text-emerald-700", overestimated: "bg-amber-50 text-amber-800", underestimated: "bg-amber-50 text-amber-800", risk_realised: "bg-red-50 text-red-700" };
+const verdictStyle: Record<string, string> = { close: "bg-emerald-50 text-emerald-700", reasonable: "bg-emerald-50 text-emerald-700", avoided_risk: "bg-emerald-50 text-emerald-700", overestimated: "bg-amber-50 text-amber-800", underestimated: "bg-amber-50 text-amber-800", risk_realised: "bg-red-50 text-red-700", indeterminate: "bg-slate-100 text-slate-600" };
 
 export default async function History() {
   const [h, n] = await Promise.all([getHistory(), getNorthStar()]);
@@ -13,9 +13,10 @@ export default async function History() {
     <div className="space-y-6">
       <PageHeader title="Decision history & memory" subtitle="Recommendation → your decision → what actually happened. This is Sahaay's memory, and the reason its advice improves over time." actions={<ActionButton endpoint="/api/outcomes/measure" variant="secondary" done="outcomes">Measure outcomes now</ActionButton>} />
       <Card>
-        <div className="grid gap-3 text-center sm:grid-cols-5">
-          {[["Recommendations", n.recommendations], ["Decided", n.decided], ["Approved / modified", n.approved], ["Outcomes measured", n.measurable], ["Good outcomes", n.positive]].map(([l, v]) => <div key={l as string} className="rounded-lg bg-slate-50 p-3"><div className="text-2xl font-semibold">{v}</div><div className="text-xs text-slate-500">{l}</div></div>)}
+        <div className="grid gap-3 text-center sm:grid-cols-6">
+          {[["Recommendations", n.recommendations], ["Decided", n.decided], ["Approved / modified", n.approved], ["Outcomes measured", n.measurable], ["Good outcomes", n.positive], ["Not measurable", n.indeterminate]].map(([l, v]) => <div key={l as string} className="rounded-lg bg-slate-50 p-3"><div className="text-2xl font-semibold">{v}</div><div className="text-xs text-slate-500">{l}</div></div>)}
         </div>
+        <p className="mt-2 text-xs text-slate-500">"Not measurable" = the window sold out the available stock, so recorded sales understate real demand. Sahaay withholds a verdict instead of scoring those decisions, and excludes them when learning forecast bias.</p>
       </Card>
       <Card>
         <h2 className="font-semibold text-slate-900">What Sahaay has learned about you</h2>

@@ -3,6 +3,7 @@ import { db } from "@/db";
 import * as s from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { consolidateOffers } from "@/lib/analysis";
+import { isBiasUsable } from "@/lib/outcomes-core";
 import { validateOrder } from "@/lib/validation";
 import type { Action, Calculation } from "@/lib/types";
 import { getAsOf } from "./engine";
@@ -159,7 +160,7 @@ export async function relearn() {
         : `${t.label[0].toUpperCase() + t.label.slice(1)} often shapes your decisions (${hits.length} time${hits.length > 1 ? "s" : ""}; ${smaller} smaller order${smaller === 1 ? "" : "s"}, ${rejected} rejection${rejected === 1 ? "" : "s"}).`;
     await setPref(key, statement, { theme: t.key, smaller, rejected }, hits.length);
   }
-  const measurable = outs.filter((o) => o.forecastDemand > 0);
+  const measurable = outs.filter(isBiasUsable);
   if (measurable.length >= 2) {
     const bias = measurable.reduce((a, o) => a + (o.actualDemand - o.forecastDemand) / o.forecastDemand, 0) / measurable.length;
     keep.add("forecast_bias");
