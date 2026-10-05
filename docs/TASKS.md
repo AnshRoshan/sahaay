@@ -97,5 +97,7 @@
 3. [ ] Show the simulation table in the morning briefing ("order 20 vs 27")
 4. [ ] Whole-shop simulation across products sharing a cash limit
 5. [ ] POS/Google Sheets sync (replace CSV)
-6. [ ] Record real "order placed" events → learn the real primary supplier
+6. [~] Record real "order placed" events → learn the real primary supplier — lifecycle +
+      measurement implemented (`order_placed`/`receipt` events, `leadtime.ts`, 11 tests); needs the
+      owner's real deliveries to have anything to learn from
 7. [ ] Cash-flow-aware limits

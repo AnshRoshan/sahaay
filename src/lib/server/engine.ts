@@ -6,6 +6,7 @@ import { analyzeProduct, supplierOpportunities, type AnalysisContext, type PrevD
 import { addDays, diffDays, todayStr } from "@/lib/dates";
 import { explainTemplate } from "@/lib/explain";
 import { historyDaysOf } from "@/lib/forecast-core";
+import { learnLeadTimes, type LeadTimePair, type SupplierLeadTime } from "@/lib/leadtime";
 import type { ProductFacts, RecDraft, RuleSet, SupplierOffer } from "@/lib/types";
 import { forecastAll } from "./forecast-service";
 import { derivedStock } from "./ledger";
@@ -28,6 +29,8 @@ export type Inputs = {
   totalStockUnits: number;
   /** Derived from the event ledger — provenance for the inventory number used in analysis. */
   ledgerStock: Record<string, { quantity: number; events: number }>;
+  /** Lead times measured from the owner's own placed→received pairs, keyed by supplier id. */
+  leadTimes: Map<string, SupplierLeadTime>;
 };
 
 export async function loadInputs(): Promise<Inputs> {
@@ -61,12 +64,18 @@ export async function loadInputs(): Promise<Inputs> {
 
   const inbound = new Map<string, number>();
   const previous: Record<string, PrevDecision> = {};
+  const pairs: LeadTimePair[] = [];
   for (const d of decs) {
     if (!d.productId) continue;
     previous[d.productId] = { kind: d.kind, recommended: d.recommendedQty, approved: d.approvedQty, reason: d.reason, date: d.decisionDate };
     if (d.kind !== "rejected" && (d.approvedQty ?? 0) > 0 && !d.arrivedAt)
       inbound.set(d.productId, (inbound.get(d.productId) ?? 0) + (d.approvedQty ?? 0));
+    // Only a real order→delivery pair teaches lead time. The demo time-machine sets arrivedAt
+    // without an orderedAtDate, so synthetic arrivals never become a "measured" supplier.
+    if (d.supplierId && d.orderedAtDate && d.arrivedAt)
+      pairs.push({ supplierId: d.supplierId, productId: d.productId, orderedAt: d.orderedAtDate, receivedAt: d.arrivedAt, promisedDays: d.leadTimeDays });
   }
+  const leadTimes = learnLeadTimes(pairs);
 
   const facts: ProductFacts[] = prods.map((p) => {
     const ser = series.get(p.id) ?? Array(WINDOW_DAYS).fill(0);
@@ -86,6 +95,7 @@ export async function loadInputs(): Promise<Inputs> {
     memory: { orderRatio: pref("order_size_ratio")?.ratio ?? null, forecastBias: pref("forecast_bias")?.bias ?? null, previous },
     totalStockUnits: facts.reduce((a, f) => a + Math.max(0, f.stock ?? 0), 0),
     ledgerStock,
+    leadTimes,
   };
 }
 
@@ -162,7 +172,7 @@ export async function runAnalysis(tracer?: Tracer): Promise<AnalysisSummary> {
       return i;
     });
     const { results, model, note } = await forecastAll(inputs.facts, inputs.asOf, t);
-    const ctx: AnalysisContext = { asOf: inputs.asOf, rules: inputs.rules, totalStockUnits: inputs.totalStockUnits, supplierNames: inputs.supplierNames, memory: inputs.memory, ledgerStock: inputs.ledgerStock };
+    const ctx: AnalysisContext = { asOf: inputs.asOf, rules: inputs.rules, totalStockUnits: inputs.totalStockUnits, supplierNames: inputs.supplierNames, memory: inputs.memory, ledgerStock: inputs.ledgerStock, leadTimes: inputs.leadTimes };
 
     const analyses = await t.span("risk.engine+recommend", (set) => {
       const out: { facts: ProductFacts; fc: NonNullable<ReturnType<typeof results.get>>; analysis: ProductAnalysis }[] = [];

@@ -1,5 +1,6 @@
 // Detection → Risk → Recommendation → Validation. Pure (no DB, no network).
 import { assessInputs, usableOffers } from "./guards";
+import { effectiveLeadDays, leadTimeStatement, type SupplierLeadTime } from "./leadtime";
 import { possibleStockoutRuns } from "./forecast-core";
 import { computeOrderQuantity, stockoutRisk, type RiskOutput } from "./risk";
 import { simulateDecision, type SimRow } from "./simulate";
@@ -39,7 +40,10 @@ export type AnalysisContext = {
     previous: Record<string, PrevDecision>;
   };
   /** Derived inventory per product from the event ledger, when available. */
+  /** Current derived quantity per product, from the event ledger. */
   ledgerStock?: Record<string, { quantity: number; events: number }>;
+  /** Lead times measured from the owner's own order→delivery pairs, keyed by supplier. */
+  leadTimes?: Map<string, SupplierLeadTime>;
 };
 
 export type ConsolidatedOffer = {
@@ -48,6 +52,11 @@ export type ConsolidatedOffer = {
   leadTimeDays: number;
   moq: number | null;
   conflicted: boolean;
+  /** Whether `leadTimeDays` is the supplier's promise or a median measured from real deliveries. */
+  leadTimeSource?: "promised" | "observed" | "unknown";
+  /** The lead time the supplier's own sheet claims, kept so the evidence can name both numbers. */
+  promisedLeadDays?: number;
+  observed?: SupplierLeadTime;
 };
 
 const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
@@ -82,19 +91,31 @@ const toCandidate = (row: SimRow, status: SimulationCandidate["validationStatus"
   validationStatus: status,
 });
 
-/** Pessimistic merge when a supplier appears more than once. */
-export function consolidateOffers(offers: SupplierOffer[]): ConsolidatedOffer[] {
+/**
+ * Pessimistic merge when a supplier appears more than once.
+ * `leadTimes` are medians measured from the owner's own recorded deliveries: where a supplier has
+ * delivered enough times, the promise in the spreadsheet stops being the number the plan uses.
+ */
+export function consolidateOffers(offers: SupplierOffer[], leadTimes: Map<string, SupplierLeadTime> = new Map()): ConsolidatedOffer[] {
   const by = new Map<string, SupplierOffer[]>();
   for (const o of usableOffers(offers)) by.set(o.supplierId, [...(by.get(o.supplierId) ?? []), o]);
-  return [...by.entries()].map(([supplierId, g]) => ({
-    supplierId,
-    price: Math.max(...g.map((o) => o.price as number)),
-    leadTimeDays: Math.max(...g.map((o) => o.leadTimeDays as number)),
-    moq: g.every((o) => o.moq === null) ? null : Math.max(...g.map((o) => o.moq ?? 0)),
-    conflicted:
-      g.length > 1 &&
-      (new Set(g.map((o) => o.price)).size > 1 || new Set(g.map((o) => o.leadTimeDays)).size > 1),
-  }));
+  return [...by.entries()].map(([supplierId, g]) => {
+    const promised = Math.max(...g.map((o) => o.leadTimeDays as number));
+    const observed = leadTimes.get(supplierId);
+    const eff = effectiveLeadDays(promised, observed);
+    return {
+      supplierId,
+      price: Math.max(...g.map((o) => o.price as number)),
+      leadTimeDays: eff.days ?? promised,
+      moq: g.every((o) => o.moq === null) ? null : Math.max(...g.map((o) => o.moq ?? 0)),
+      conflicted:
+        g.length > 1 &&
+        (new Set(g.map((o) => o.price)).size > 1 || new Set(g.map((o) => o.leadTimeDays)).size > 1),
+      leadTimeSource: eff.source,
+      promisedLeadDays: promised,
+      observed,
+    };
+  });
 }
 
 /** Primary supplier = fastest delivery (ties → cheaper), restricted to allowed list when set. */
@@ -123,7 +144,7 @@ export function analyzeProduct(
 ): ProductAnalysis {
   const { rules } = ctx;
   const guard = assessInputs(f, rules);
-  const consolidated = consolidateOffers(f.offers);
+  const consolidated = consolidateOffers(f.offers, ctx.leadTimes ?? new Map());
   const primary = pickPrimary(consolidated, rules.allowedSuppliers);
   const signals: SignalDraft[] = [];
   const recs: RecDraft[] = [];
@@ -268,8 +289,11 @@ export function analyzeProduct(
       source: "supplier",
       label: "Supplier lead time",
       value: primary.leadTimeDays,
-      status: conflict ? "CONFLICTING" : "CONFIRMED",
-      explanation: `${sName(ctx, primary.supplierId)} needs ${primary.leadTimeDays} days to deliver.${conflict ? " Sources disagreed on this value; the slowest was used." : ""}`,
+      status: conflict ? "CONFLICTING" : primary.leadTimeSource === "observed" ? "INFERRED" : "CONFIRMED",
+      explanation:
+        primary.leadTimeSource === "observed" && primary.observed
+          ? `${sName(ctx, primary.supplierId)}: planning on ${primary.leadTimeDays} days. ${leadTimeStatement(primary.observed)} The supplier's sheet says ${primary.promisedLeadDays} days.`
+          : `${sName(ctx, primary.supplierId)} needs ${primary.leadTimeDays} days to deliver — the supplier's stated lead time.${conflict ? " Sources disagreed on this value; the slowest was used." : ""}${primary.observed ? ` ${leadTimeStatement(primary.observed)}` : " No delivery has been recorded against an order yet, so nothing has been measured."}`,
     },
     {
       source: "supplier",

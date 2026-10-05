@@ -25,6 +25,7 @@ Legend: ✅ implemented and exercised in the build sandbox · 🔌 adapter imple
 | B6 | Inferred historical stockouts (explicitly labelled "inferred") | ✅ |
 | B7 | Inbound-order awareness (approved orders count as stock until delivered) | ✅ |
 | B8 | **Decision simulator**: 400 seeded futures per candidate quantity → post-delivery stockout risk, overstock risk, unmet demand, pre-delivery loss, leftover, cash committed, net cash | ✅ `simulate.ts` |
+| B10 | **Lead-time learning**: supplier lead time is measured from the owner's own order→delivery pairs (median, MAD, range, n) and replaces the spreadsheet promise — but only at n≥3 (provisional, never used to shorten the plan) and n≥10 (measured). Pairs dated the wrong way round are dropped, not clamped | ✅ `leadtime.ts` |
 | B9 | **Simulation limitations stated in the product**, not hidden (constant demand rate, no supplier delay, fixed price, pre-delivery loss excluded from risk) | ✅ `SimulationTable` |
 
 ## B2. Operational event ledger & capture

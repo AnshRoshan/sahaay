@@ -29,7 +29,7 @@ or CONFLICTING is refused rather than completed with a guess.
 - **Prediction vs recommendation**: forecast says what's likely; the decision engine says what to do. Different modules.
 - **Stockout risk**: P(demand during supplier lead time > on-hand + inbound) via normal approximation (`src/lib/risk.ts`).
 - **Order quantity**: `max(MOQ, ceil(rate×(lead+review) + buffer − stock))` — MOQ is a floor, buffer is `safetyBufferPct`.
-- **Primary supplier**: fastest delivery (ties → cheaper), restricted to allowed suppliers. Documented assumption until real order history exists.
+- **Primary supplier**: fastest *effective* lead time (ties → cheaper), restricted to allowed suppliers. Effective lead time is the supplier's promise **unless** recorded deliveries measure it: median of the order→receipt gaps, used from n≥3 (provisional, never shortening the plan) and replacing the promise outright at n≥10 (measured). Below n≥3 the promise stands and the UI says so.
 - **Guard verdicts**: OK, LOW_CONFIDENCE, FLAG_CONFLICT, ABSTAIN, DATA_ERROR.
 - **Validation status**: pass / warn (needs explicit confirm) / block (cannot proceed).
 - **Evidence**: `{source, label, value, explanation, timestamp}`; sources: sales, inventory, forecast, supplier, rules, memory, web (extended from spec's five).
