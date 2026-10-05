@@ -81,7 +81,7 @@ export default function DecisionPanel({
             {status !== "executed" ? (
               <button disabled={busy} onClick={async () => { setBusy(true); const r = await fetch(`/api/recommendations/${id}/execute`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); if (!r.ok) setErr((await r.json().catch(() => ({})))?.error ?? "Could not record the order."); router.refresh(); setBusy(false); }} className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 font-medium text-slate-800 hover:bg-slate-50">I placed this order ✓</button>
             ) : (
-              <OrderArrived id={id} orderedQty={q} orderedAt={decision?.orderedAtDate ?? null} arrivedAt={decision?.arrivedAt} receivedQty={decision?.receivedQty ?? null} onDone={() => router.refresh()} />
+              <OrderArrived id={id} orderedQty={q} orderedAt={decision?.orderedAtDate ?? null} arrivedAt={decision?.arrivedAt} receivedQty={decision?.receivedQty ?? null} promisedDays={decision?.leadTimeDays ?? null} onDone={() => router.refresh()} />
             )}
           </>
         )}
@@ -160,8 +160,8 @@ export default function DecisionPanel({
  * records the delivery, which is the only moment stock changes — and the gap between the two is
  * the supplier's real lead time, which replaces the "fastest delivery" assumption in ADR-010.
  */
-function OrderArrived({ id, orderedQty, orderedAt, arrivedAt, receivedQty, onDone }: {
-  id: string; orderedQty: number; orderedAt?: string | null; arrivedAt?: string | null; receivedQty?: number | null; onDone: () => void;
+function OrderArrived({ id, orderedQty, orderedAt, arrivedAt, receivedQty, promisedDays, onDone }: {
+  id: string; orderedQty: number; orderedAt?: string | null; arrivedAt?: string | null; receivedQty?: number | null; promisedDays?: number | null; onDone: () => void;
 }) {
   const [at, setAt] = useState(orderedAt ?? "");
   const [qty, setQty] = useState(String(orderedQty));
@@ -174,7 +174,12 @@ function OrderArrived({ id, orderedQty, orderedAt, arrivedAt, receivedQty, onDon
     return (
       <div className="rounded-lg bg-teal-50 p-3 text-sm text-teal-900">
         <div className="font-semibold">Delivered — {receivedQty ?? orderedQty} unit(s) received on {arrivedAt}</div>
-        {leadDays !== null && <div className="mt-0.5 text-teal-800">Actual lead time for this order: {leadDays} day{leadDays === 1 ? "" : "s"} (supplier promised {orderedAt ? "" : "no date"}). Sahaay learns the real figure from deliveries like this one.</div>}
+        {leadDays !== null && (
+          <div className="mt-0.5 text-teal-800">
+            This order took {leadDays} day{leadDays === 1 ? "" : "s"} to arrive{promisedDays ? `, against the ${promisedDays} on the supplier sheet` : ""}.
+            Sahaay only replaces a promise with a measurement after 3 recorded deliveries from that supplier.
+          </div>
+        )}
       </div>
     );
   }

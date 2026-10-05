@@ -52,7 +52,7 @@ export type LedgerState = {
   /** True when the newest event is dated after `asOf`: its effects cannot be trusted yet. */
   futureDated: boolean;
   /** Running balance after each event, oldest → newest. Explains *why* the quantity is what it is. */
-  trail: { at: string; kind: LedgerEventKind; delta: number; balance: number; source: EventSource; note?: string }[];
+  trail: { at: string; kind: LedgerEventKind; /** The event's own quantity, before signing — so an order can show what was committed. */ qty: number; delta: number; balance: number; source: EventSource; note?: string }[];
 };
 
 /**
@@ -84,7 +84,7 @@ export function reduceEvents(events: LedgerEvent[], asOf?: string): Map<string, 
     st.lastEventAt = e.at;
     st.eventCount++;
     if (asOf && e.at > asOf) st.futureDated = true;
-    st.trail.push({ at: e.at, kind: e.kind, delta: e.kind === "stock_count" ? e.qty - (st.baselineQty ?? 0) : delta, balance: st.quantity, source: e.source, note: e.note });
+    st.trail.push({ at: e.at, kind: e.kind, qty: e.qty, delta: e.kind === "stock_count" ? e.qty - (st.baselineQty ?? 0) : delta, balance: st.quantity, source: e.source, note: e.note });
   }
   return out;
 }

@@ -6,7 +6,8 @@ import { analyzeProduct, supplierOpportunities, type AnalysisContext, type PrevD
 import { addDays, diffDays, todayStr } from "@/lib/dates";
 import { explainTemplate } from "@/lib/explain";
 import { historyDaysOf } from "@/lib/forecast-core";
-import { learnLeadTimes, type LeadTimePair, type SupplierLeadTime } from "@/lib/leadtime";
+import { learnLeadTimes, type SupplierLeadTime } from "@/lib/leadtime";
+import { pairsFromDecisions } from "./leadtime";
 import type { ProductFacts, RecDraft, RuleSet, SupplierOffer } from "@/lib/types";
 import { forecastAll } from "./forecast-service";
 import { derivedStock } from "./ledger";
@@ -64,18 +65,13 @@ export async function loadInputs(): Promise<Inputs> {
 
   const inbound = new Map<string, number>();
   const previous: Record<string, PrevDecision> = {};
-  const pairs: LeadTimePair[] = [];
   for (const d of decs) {
     if (!d.productId) continue;
     previous[d.productId] = { kind: d.kind, recommended: d.recommendedQty, approved: d.approvedQty, reason: d.reason, date: d.decisionDate };
     if (d.kind !== "rejected" && (d.approvedQty ?? 0) > 0 && !d.arrivedAt)
       inbound.set(d.productId, (inbound.get(d.productId) ?? 0) + (d.approvedQty ?? 0));
-    // Only a real order→delivery pair teaches lead time. The demo time-machine sets arrivedAt
-    // without an orderedAtDate, so synthetic arrivals never become a "measured" supplier.
-    if (d.supplierId && d.orderedAtDate && d.arrivedAt)
-      pairs.push({ supplierId: d.supplierId, productId: d.productId, orderedAt: d.orderedAtDate, receivedAt: d.arrivedAt, promisedDays: d.leadTimeDays });
   }
-  const leadTimes = learnLeadTimes(pairs);
+  const leadTimes = learnLeadTimes(pairsFromDecisions(decs));
 
   const facts: ProductFacts[] = prods.map((p) => {
     const ser = series.get(p.id) ?? Array(WINDOW_DAYS).fill(0);

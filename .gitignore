@@ -8,3 +8,6 @@ __pycache__
 
 # local tool artifacts
 .freebuff/
+
+# local verification screenshots (headless Chrome)
+.verify/

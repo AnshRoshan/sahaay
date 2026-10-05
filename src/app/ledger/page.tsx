@@ -76,8 +76,8 @@ export default async function LedgerPage() {
                 <Td>
                   <div className="flex flex-wrap gap-1">
                     {s.trail.slice(-6).map((t, i) => (
-                      <span key={i} title={`${t.at} · ${t.source}${t.note ? ` · ${t.note}` : ""}`} className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-600">
-                        {t.delta >= 0 ? "+" : ""}{t.delta}
+                      <span key={i} title={`${t.at} · ${t.source}${t.note ? ` · ${t.note}` : ""}`} className={t.kind === "order_placed" ? "rounded bg-amber-100 px-1.5 py-0.5 font-mono text-[11px] text-amber-800" : "rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-600"}>
+                        {t.kind === "order_placed" ? `▸ ${t.qty} ordered` : `${t.delta >= 0 ? "+" : ""}${t.delta}`}
                       </span>
                     ))}
                   </div>
