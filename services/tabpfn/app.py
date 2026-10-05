@@ -38,13 +38,37 @@ def auth(authorization: Optional[str] = Header(default=None)):
         raise HTTPException(status_code=401, detail="unauthorized")
 
 
+def _tabpfn_version() -> tuple[int, str]:
+    from importlib.metadata import version
+
+    raw = version("tabpfn")
+    try:
+        return int(raw.split(".")[0]), raw
+    except ValueError:  # unparseable version string: treat as unverified, not as safe
+        return 999, raw
+
+
+# Only the v2 weights carry a license that permits commercial use ("Prior Labs License v1.1",
+# Apache-2.0 + attribution). Later releases - what a bare `pip install tabpfn` resolves to now -
+# are non-commercial and explicitly bar using results for commercial decision-making, which is
+# precisely what Sahaay does with a forecast. The version check is enforced, not documented.
+COMMERCIAL_OK_MAJOR = 2
+ATTRIBUTION = "Includes TabPFN v2 weights (Prior Labs), licensed under the Prior Labs License v1.1 (Apache-2.0 with attribution)."
+
+
 @app.get("/health")
 def health():
-    return {"ok": True}
+    major, raw = _tabpfn_version()
+    if major > COMMERCIAL_OK_MAJOR:
+        raise HTTPException(status_code=503, detail=f"tabpfn {raw} weights are non-commercially licensed; pin tabpfn>=2.0,<3")
+    return {"ok": True, "tabpfnVersion": raw, "license": "priorlabs-1.1", "attribution": ATTRIBUTION}
 
 
 @app.post("/predict", dependencies=[Depends(auth)])
 def predict(req: Req):
+    major, raw = _tabpfn_version()
+    if major > COMMERCIAL_OK_MAJOR:
+        raise HTTPException(status_code=503, detail=f"refusing to forecast with tabpfn {raw}: its license bars commercial decision support")
     if not req.train.y or len(req.train.X) != len(req.train.y):
         raise HTTPException(status_code=422, detail="train.X and train.y must have equal length")
     if len(req.train.X) < 20:

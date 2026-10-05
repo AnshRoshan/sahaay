@@ -1,4 +1,8 @@
-tabpfn>=2.0
+# License gate, not a compatibility preference: only the v2 weights permit commercial use
+# (Prior Labs License v1.1 = Apache-2.0 + attribution). Newer releases - which is what an
+# unpinned `pip install tabpfn` resolves to today - are non-commercial and bar using results
+# for commercial decision-making. app.py refuses to serve if a newer line is installed.
+tabpfn>=2.0,<3
 fastapi>=0.110
 uvicorn[standard]>=0.29
 numpy

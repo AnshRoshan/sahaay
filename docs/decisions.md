@@ -68,3 +68,20 @@
 ## ADR-016 — A quantity must sit next to its product to count
 **Decision:** `quantityNearProduct` accepts a number as a quantity only when it is adjacent to a product name or packaging word ("20 carton basmati", "teen basmati aaya"). Elsewhere ("size 32", "3 colours") it is ignored and the line is reported MISSING.
 **Why:** The first parser took the first number in the clause, so "size 32 jeans" would have recorded a 32-unit movement — inventing inventory from a size. In a system whose differentiator is trustworthy capture, a wrong-but-plausible write is the worst possible failure.
+
+## ADR-017 — TabPFN is pinned to the v2 weights for license reasons, not compatibility
+**Decision:** `services/tabpfn/requirements.txt` requires `tabpfn>=2.0,<3`, and `app.py` refuses to answer `/health` or `/predict` if a newer line is installed (503). The v2 attribution string is served from `/health` so it is visible at runtime rather than buried in a file.
+**Why:** TabPFN v2 ships under the Prior Labs License v1.1 (Apache-2.0 + attribution) and permits commercial use. The later releases — 2.5, 2.6, 3.x, which is what an unpinned `pip install tabpfn` resolves to today — are non-commercially licensed and bar using results for commercial decision-making. Sahaay's forecasts feed a shop owner's purchase orders, which is exactly that. A pin alone would drift silently on a rebuild, so the version is checked where it matters.
+**Cost:** No access to the newer weights' accuracy claims. If they ever matter, the path is a commercial licence from Prior Labs, recorded as a new ADR — not a version bump.
+**Related:** `docs/evaluation.md` — the TabPFN-vs-local comparison is still unrun, so no accuracy claim is made for either.
+
+## ADR-018 — A censored demand window produces no verdict
+**Decision:** When a decision window sold everything that was available (`sales >= opening stock + units ordered`), `classifyOutcome` returns `indeterminate` instead of a verdict, and `isBiasUsable` keeps that outcome out of forecast-bias learning. The count is shown on the history page as "Not measurable".
+**Why:** Recorded sales are a *lower bound* on demand — you cannot sell what you did not have. Scoring them as demand inverted the learning loop in the highest-stakes case: declining a reorder and stocking out read as "avoided risk", and the same censoring made the forecast look too high, so `relearn` pushed future quantities down, causing more stockouts and more censored windows. A verdict that cannot be observed is not a verdict.
+**Cost:** Some decisions never receive a score, so the outcome loop looks quieter than before. The alternative — a confident wrong answer that compounds — is worse under invariant 7.
+**Rejected:** Estimating true demand by assuming the stockout lasted the whole window; plausible, untestable, and it would fabricate a number the ledger cannot support.
+
+## ADR-019 — Demo tooling is off unless explicitly enabled
+**Decision:** `/api/demo/load` and `/api/demo/simulate` return 403 unless `DEMO_MODE=1`. When the database already holds records, loading the demo returns 409 with `needsConfirmation` and the number of rows at risk, and proceeds only on a resent `confirm: true`.
+**Why:** `resetAll()` truncates 16 tables including `ledger_events`, the append-only source of business truth with no undo, and the time-machine appends synthetic sales and receipts into that same ledger. Both were one unlabelled click away on the home page and the import page. Demo data and real data must never share a database, and the deployment default says so.
+**Cost:** The demo needs one more env var, which is annoying for a first run. Documented in README and `.env.example`.
