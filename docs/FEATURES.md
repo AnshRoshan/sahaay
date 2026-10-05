@@ -65,7 +65,7 @@ Legend: ✅ implemented and exercised in the build sandbox · 🔌 adapter imple
 | D2 | Live re-validation while editing; block → refuse, warn → explicit confirm | ✅ |
 | D3 | Order message draft (copy) — Sahaay never contacts suppliers | ✅ |
 | D4 | "I placed this order" (EXECUTED) | ✅ |
-| D5 | Decision lifecycle visible in UI | ✅ |
+| D5 | Decision lifecycle visible in UI — only stages that genuinely happened are stamped (an abstaining rec shows no SIMULATED/VALIDATED chip) | ✅ |
 | D6 | Decision history: recommended vs human vs outcome | ✅ |
 | D7 | Outcome monitoring: actual vs forecast, verdicts, comparison of owner's edit vs recommendation. Windows where the available stock all sold are **censored** (recorded sales understate demand), so those get an `indeterminate` verdict and are excluded from forecast-bias learning | ✅ `outcomes-core.ts` |
 | D8 | Preference learning (order-size ratio, reason themes, forecast bias) → shown, only influences alternatives | ✅ |

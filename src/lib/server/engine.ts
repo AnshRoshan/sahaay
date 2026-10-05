@@ -93,10 +93,15 @@ export function newRecId() {
   return `rec_${crypto.randomUUID().slice(0, 10)}`;
 }
 
-export function initialLifecycle(): { stage: string; at: string; note?: string }[] {
+export function initialLifecycle(d: { simulation?: unknown; validation?: unknown }): { stage: string; at: string; note?: string }[] {
   const at = new Date().toISOString();
-  // capture → understand → predict → simulate → verify → awaiting human approval
-  return ["DETECTED", "ANALYZED", "RECOMMENDED", "SIMULATED", "VALIDATED", "PENDING_APPROVAL"].map((stage) => ({ stage, at }));
+  // Only stages that actually happened. An abstaining recommendation has no simulation and no
+  // validation, and stamping them would claim work the engine never did.
+  const stages = ["DETECTED", "ANALYZED", "RECOMMENDED"];
+  if (d.simulation) stages.push("SIMULATED");
+  if (d.validation) stages.push("VALIDATED");
+  stages.push("PENDING_APPROVAL");
+  return stages.map((stage) => ({ stage, at }));
 }
 
 export async function persistRecs(drafts: RecDraft[]) {
@@ -122,7 +127,7 @@ export async function persistRecs(drafts: RecDraft[]) {
       await db.update(s.recommendations).set(fields).where(eq(s.recommendations.id, ex.id));
       updated++;
     } else {
-      await db.insert(s.recommendations).values({ id: newRecId(), dedupeKey: d.dedupeKey, status: "pending", lifecycle: initialLifecycle(), ...fields });
+      await db.insert(s.recommendations).values({ id: newRecId(), dedupeKey: d.dedupeKey, status: "pending", lifecycle: initialLifecycle(d), ...fields });
       created++;
     }
   }

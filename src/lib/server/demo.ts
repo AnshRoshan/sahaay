@@ -58,9 +58,10 @@ async function seedHistory() {
       productId: f.id, status, confidence: d.confidence, abstain: false, verdict: d.verdict, needsInfo: [],
       evidence: d.evidence as unknown[], action: d.action as unknown as Record<string, unknown>, risks: d.risks as unknown[],
       alternatives: d.alternatives as unknown[], validation: d.validation as unknown as Record<string, unknown>,
+      simulation: (d.simulation ?? null) as unknown as Record<string, unknown> | null,
       calculation: d.calculation as unknown as Record<string, unknown>, explanation: explainTemplate(d), explanationSource: "template",
       lifecycle: [
-        ...initialLifecycle().map((l) => ({ ...l, at })),
+        ...initialLifecycle(d).map((l) => ({ ...l, at })),
         { stage: h.kind === "rejected" ? "REJECTED" : h.kind === "modified" ? "MODIFIED" : "APPROVED", at, note: h.reason ?? undefined },
         ...(h.kind !== "rejected" ? [{ stage: "MONITORED", at }] : []),
       ],
