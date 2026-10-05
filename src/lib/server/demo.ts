@@ -10,6 +10,7 @@ import { explainTemplate } from "@/lib/explain";
 import { historyDaysOf, HORIZON, localForecast } from "@/lib/forecast-core";
 import type { ForecastResult } from "@/lib/types";
 import { initialLifecycle, loadInputs, newRecId, runAnalysis } from "./engine";
+import { HttpError } from "./http";
 import { ingestCsv, type IngestReport } from "./ingest";
 import { relearn } from "./memory";
 import { measureOutcomes } from "./outcomes";
@@ -24,7 +25,20 @@ const HISTORY = [
   { productId: "blue-jeans-34", daysAgo: 12, kind: "rejected" as const, factor: 1, stock: 2, reason: "I still have stock arriving from last month" },
 ];
 
-export async function resetAll() {
+export async function resetAll(opts: { confirm?: boolean } = {}) {
+  const [events, salesRows] = await Promise.all([
+    db.select({ n: sql<number>`count(*)::int` }).from(s.ledgerEvents),
+    db.select({ n: sql<number>`count(*)::int` }).from(s.sales),
+  ]);
+  const atRisk = (events[0]?.n ?? 0) + (salesRows[0]?.n ?? 0);
+  if (atRisk > 0 && !opts.confirm && process.env.ALLOW_DEMO_RESET !== "1") {
+    // ledger_events is append-only business truth; truncating it cannot be undone.
+    throw new HttpError(
+      409,
+      `Loading the demo shop would erase ${atRisk} record(s) already in this database. The ledger has no undo.`,
+      { needsConfirmation: true, recordsAtRisk: atRisk },
+    );
+  }
   await db.execute(sql`truncate table ledger_events, captures, sales, inventory, supplier_offers, suppliers, products, imports, data_quality_issues, forecasts, signals, recommendations, decisions, outcomes, preferences, workflow_runs, agent_runs restart identity`);
 }
 
@@ -78,10 +92,10 @@ async function seedHistory() {
   return seeded;
 }
 
-export async function loadDemo(): Promise<{ imports: IngestReport[]; seededDecisions: number; analysisRunId?: string }> {
+export async function loadDemo(opts: { confirm?: boolean } = {}): Promise<{ imports: IngestReport[]; seededDecisions: number; analysisRunId?: string }> {
   const t = new Tracer("analysis", "load demo shop");
   try {
-    await t.span("demo.reset", () => resetAll());
+    await t.span("demo.reset", () => resetAll(opts));
     const bundle = generateDemoCsvs();
     const imports: IngestReport[] = [];
     // Order matters: products must exist before anything references them, and sales must be

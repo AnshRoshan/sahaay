@@ -5,14 +5,23 @@ import { cookies } from "next/headers";
 
 export const COOKIE = "sahaay_session";
 
-const secret = () => process.env.SESSION_SECRET || "sahaay-dev-secret-change-me";
+const secret = (): string => {
+  const s = process.env.SESSION_SECRET;
+  if (s) return s;
+  if (process.env.NODE_ENV === "production") {
+    // The dev fallback is public in the repository, so a production instance without a
+    // SESSION_SECRET would let anyone mint a valid owner cookie.
+    throw new Error("SESSION_SECRET is not set. Refusing to sign sessions in production with the development fallback secret.");
+  }
+  return "sahaay-dev-secret-change-me";
+};
 export const authRequired = () => !!process.env.SAHAAY_ACCESS_CODE;
 
 export function tokenFor(code: string): string {
   return createHmac("sha256", secret()).update(code).digest("hex");
 }
 
-function safeEqual(a: string, b: string): boolean {
+export function safeEqual(a: string, b: string): boolean {
   const ba = Buffer.from(a);
   const bb = Buffer.from(b);
   return ba.length === bb.length && timingSafeEqual(ba, bb);

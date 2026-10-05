@@ -25,9 +25,16 @@ Three ideas carry most of the weight:
 ```bash
 npm install
 cp .env.example .env            # DATABASE_URL is the only required value
-npx drizzle-kit push            # create tables
+npx drizzle-kit generate        # after editing src/db/schema.ts
+npx drizzle-kit migrate         # apply committed migrations from drizzle/
 npm run dev                     # http://localhost:3000
 ```
+`DATABASE_URL` must be present for `npm run build` too — route modules construct the pool at import
+time, so page-data collection fails without it.
+
+Set `DEMO_MODE=1` if you want the **Load demo shop** button and the time-machine. They are off by
+default because both write into the same tables as real business data: loading the demo truncates
+every table, and simulating days appends synthetic sales and receipts to the ledger.
 Open the app → **Load demo shop** (a realistic garment store with deliberately messy data), or upload your own CSVs on **Import data**.
 
 Tests: `npx tsx --test tests/**/*.test.ts` (safety, grounding, math, forecasting, event ledger, capture parser, simulator). The same safety cases run live on the **Architecture** page.

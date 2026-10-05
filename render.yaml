@@ -1,14 +1,26 @@
 # Render Blueprint: web app + Postgres + cron tick. Gemma/TabPFN run as separate services (see services/).
+#
+# Migrations are NOT run from buildCommand. A build container on Render is ephemeral and can be
+# re-run at any time; `drizzle-kit push --force` there would silently mutate the live database on
+# every deploy with no history and no way back. Schema changes are committed to ./drizzle and
+# applied deliberately, once, from a Render shell:
+#
+#   npx drizzle-kit migrate        # inside the service shell, DATABASE_URL is already set
+#
+# Render has no release phase, so this is a documented manual step rather than automation that
+# could fire against the wrong database.
 databases:
   - name: sahaay-db
-    plan: free
+    # The free Postgres plan is deleted 30 days after creation. It cannot hold a shop's real
+    # sales history, ledger, or decisions.
+    plan: starter
     databaseName: sahaay
 services:
   - type: web
     name: sahaay-web
     runtime: node
     plan: starter
-    buildCommand: npm ci && npx drizzle-kit push --force && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm run start
     healthCheckPath: /api/health
     envVars:
@@ -20,6 +32,10 @@ services:
         generateValue: true
       - key: CRON_SECRET
         generateValue: true
+      # Demo data and the time-machine write synthetic movements into the same ledger as real
+      # business truth. Off by default; only an instance meant for demos should set this to 1.
+      - key: DEMO_MODE
+        value: "0"
       - key: GEMMA_BASE_URL
         sync: false
       - key: TABPFN_URL
@@ -35,7 +51,7 @@ services:
     runtime: node
     schedule: "*/15 * * * *"
     buildCommand: "true"
-    startCommand: 'curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" "$SAHAAY_URL/api/cron/tick"'
+    startCommand: 'curl -fsS -X POST --retry 5 --retry-delay 10 --retry-connrefused -H "Authorization: Bearer $CRON_SECRET" "$SAHAAY_URL/api/cron/tick"'
     envVars:
       - key: CRON_SECRET
         fromService: { type: web, name: sahaay-web, envVarKey: CRON_SECRET }

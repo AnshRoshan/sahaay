@@ -38,7 +38,8 @@ Keep `src/lib/*.ts` free of imports from `src/lib/server` and `@/db` — tests a
 ## Commands
 ```bash
 npm run dev
-npx drizzle-kit push                         # apply schema (interactive; `npx drizzle-kit generate` + psql -f also works)
+npx drizzle-kit generate                     # after editing src/db/schema.ts → SQL migration in drizzle/
+npx drizzle-kit migrate                      # apply committed migrations (never from buildCommand)
 npx tsx --test tests/**/*.test.ts            # safety/grounding/math/forecast/ledger/capture/simulator tests
 npx next typegen && npm exec tsc -- --noEmit --pretty false
 npm run build

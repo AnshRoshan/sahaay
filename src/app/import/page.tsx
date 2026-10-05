@@ -7,14 +7,17 @@ export const dynamic = "force-dynamic";
 
 export default async function ImportPage() {
   const d = await getDataSummary();
+  const demoOn = process.env.DEMO_MODE === "1";
   return (
     <div className="space-y-6">
       <PageHeader title="Import & data quality" subtitle="Upload your CSV exports. Sahaay detects columns, validates every row, and reports problems instead of silently assuming. Each upload of a file type replaces the previous one." />
       <Card>
         <UploadForm />
         <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 text-sm">
-          <span className="text-slate-600">No data handy?</span>
-          <ActionButton endpoint="/api/demo/load" variant="secondary" done="demo">Load demo garment shop</ActionButton>
+          {demoOn && <>
+            <span className="text-slate-600">No data handy?</span>
+            <ActionButton endpoint="/api/demo/load" variant="secondary" done="demo">Load demo garment shop</ActionButton>
+          </>}
           <span className="text-slate-400">or download samples:</span>
           {["products", "inventory", "suppliers", "sales"].map((k) => <a key={k} href={`/api/samples/${k}.csv`} className="text-indigo-700 underline">{k}.csv</a>)}
         </div>

@@ -35,8 +35,16 @@ export default function ActionButton({
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
-      const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      let res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
+      let json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      // A 409 carrying needsConfirmation is the server's last line of defence before something
+      // irreversible (e.g. the demo reset truncating a real ledger). Ask, then resend.
+      if (res.status === 409 && json.needsConfirmation) {
+        const proceed = window.confirm(`${String(json.error ?? "This cannot be undone.")}\n\nContinue anyway?`);
+        if (!proceed) { setMsg({ ok: false, text: "Cancelled — nothing was changed." }); setBusy(false); return; }
+        res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...(body ?? {}), confirm: true }) });
+        json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      }
       if (!res.ok) throw new Error(String(json.error ?? `Request failed (${res.status})`));
       setMsg({ ok: true, text: (FORMAT[done] ?? FORMAT.text)(json) });
       router.refresh();

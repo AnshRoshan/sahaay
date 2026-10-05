@@ -103,4 +103,4 @@ Deterministic quantity (`computeOrderQuantity`) → `simulateDecision` over the 
 products, suppliers, supplier_offers, sales, inventory, imports, data_quality_issues · **ledger_events** (append-only), **captures** (raw owner messages + parse result) · forecasts, signals, recommendations · decisions, outcomes, preferences, business_rules · workflow_runs, workflow_schedules, agent_runs.
 
 ## Deployment
-Render web service (build runs `drizzle-kit push` then `next build`), Render Postgres, Render Cron hitting `/api/cron/tick`. Optional: Gemma (Ollama/vLLM) and TabPFN (`services/tabpfn`) as private services; Temporal worker (`services/worker`).
+Render web service (build runs `npm ci && next build`; migrations are applied separately with `npx drizzle-kit migrate`, never from the build container), Render Postgres (paid plan — the free plan is deleted 30 days after creation), Render Cron hitting `POST /api/cron/tick` with the `CRON_SECRET` bearer token. Optional: Gemma (Ollama/vLLM) and TabPFN (`services/tabpfn`) as private services.

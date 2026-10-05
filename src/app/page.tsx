@@ -10,12 +10,13 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const summary = await getDataSummary();
+  const demoOn = process.env.DEMO_MODE === "1";
   if (!summary.hasData) {
     return (
       <div className="pt-6">
         <EmptyState title="Welcome to Sahaay" body="Sahaay turns your sales, inventory and supplier data into explainable decisions. Upload your CSVs, or explore with a realistic demo garment shop.">
           <Link href="/import" className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">Import my data</Link>
-          <ActionButton endpoint="/api/demo/load" variant="secondary" done="demo">Load demo shop</ActionButton>
+          {demoOn && <ActionButton endpoint="/api/demo/load" variant="secondary" done="demo">Load demo shop</ActionButton>}
         </EmptyState>
       </div>
     );
@@ -70,14 +71,16 @@ export default async function Home() {
         </Card>
       )}
 
-      <Card className="border-dashed bg-slate-50">
-        <h2 className="font-semibold text-slate-900">Demo time machine <span className="ml-1 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">SIMULATION</span></h2>
-        <p className="mt-1 text-sm text-slate-600">Fast-forward 7 days to see the outcome loop: sales are generated from the forecast, stock is drawn down, ordered goods arrive, and Sahaay measures what happened versus its recommendation. Don&apos;t use on real data.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <ActionButton endpoint="/api/demo/simulate" body={{ days: 7 }} done="simulate">⏩ Simulate next 7 days</ActionButton>
-          <ActionButton endpoint="/api/demo/load" variant="secondary" confirm="This resets all data and reloads the demo shop. Continue?" done="demo">Reset demo shop</ActionButton>
-        </div>
-      </Card>
+      {demoOn && (
+        <Card className="border-dashed bg-slate-50">
+          <h2 className="font-semibold text-slate-900">Demo time machine <span className="ml-1 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">SIMULATION</span></h2>
+          <p className="mt-1 text-sm text-slate-600">Fast-forward 7 days to see the outcome loop: sales are generated from the forecast, stock is drawn down, ordered goods arrive, and Sahaay measures what happened versus its recommendation. Don&apos;t use on real data.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <ActionButton endpoint="/api/demo/simulate" body={{ days: 7 }} done="simulate">⏩ Simulate next 7 days</ActionButton>
+            <ActionButton endpoint="/api/demo/load" variant="secondary" confirm="This resets all data and reloads the demo shop. Continue?" done="demo">Reset demo shop</ActionButton>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

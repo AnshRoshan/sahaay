@@ -70,7 +70,7 @@ Legend: ✅ implemented and exercised in the build sandbox · 🔌 adapter imple
 | D7 | Outcome monitoring: actual vs forecast, verdicts, comparison of owner's edit vs recommendation. Windows where the available stock all sold are **censored** (recorded sales understate demand), so those get an `indeterminate` verdict and are excluded from forecast-bias learning | ✅ `outcomes-core.ts` |
 | D8 | Preference learning (order-size ratio, reason themes, forecast bias) → shown, only influences alternatives | ✅ |
 | D9 | North-star metrics (decisions with measurable outcomes) | ✅ |
-| D10 | Demo time-machine (simulate N days, deliveries, outcome measurement) | ✅ (SIMULATION) |
+| D10 | Demo time-machine (simulate N days, deliveries, outcome measurement). Gated behind `DEMO_MODE=1`: it appends synthetic sales/receipts to the **real** ledger, so it is off wherever real data lives | ✅ (SIMULATION) |
 
 ## E. Assistant
 | # | Feature | Status |
@@ -100,8 +100,8 @@ Legend: ✅ implemented and exercised in the build sandbox · 🔌 adapter imple
 | G6 | Voice briefing: ElevenLabs TTS / browser fallback | 🔌 / ✅ |
 | G7 | Observability: per-run spans in-app (agent_runs) | ✅ |
 | G8 | Sentry error forwarding | 🔌 |
-| G9 | Owner auth (access code, signed cookie) + open-mode warning | ✅ |
-| G10 | Render blueprint, Dockerfile, docker-compose | ✅ (files) |
+| G9 | Owner auth (access code, signed cookie) + open-mode warning. `SESSION_SECRET` missing in production is a hard error rather than the published dev fallback, and `/api/cron/tick` requires `CRON_SECRET` instead of falling back to session auth | ✅ |
+| G10 | Render blueprint, Dockerfile, docker-compose. Paid Postgres plan (free plan self-deletes at 30 days); migrations committed under `drizzle/` and applied with `drizzle-kit migrate`, never from `buildCommand` | ✅ (files) |
 | G11 | `/api/health` | ✅ |
 
 ## H. Quality
