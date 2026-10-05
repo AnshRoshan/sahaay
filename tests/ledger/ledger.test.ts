@@ -160,6 +160,23 @@ test("word numbers and ambiguity are labelled honestly", () => {
   assert.equal(matchProduct("nothing here", products).match, "none");
 });
 
+// ── Capture in Devanagari: non-Latin input must not be silently discarded ─
+const devaProducts = [{ id: "neeli-shirt", name: "नीली शर्ट" }];
+const devaStock = { "neeli-shirt": 4 };
+
+test("a Devanagari product name still yields a quantity when the owner writes in Hindi", () => {
+  const r = parseCapture("20 नीली शर्ट आया", { products: devaProducts, stock: devaStock, today: "2025-06-10" });
+  assert.equal(r.events.length, 1);
+  assert.equal(r.events[0].productId, "neeli-shirt");
+  assert.equal(r.events[0].qty, 20, "tokenising on [^a-z0-9] used to delete every Hindi word, leaving a bare number with nothing to attach to");
+});
+
+test("a Hindi-script message we cannot match is reported verbatim, not dropped", () => {
+  const r = parseCapture("दस पैकेट अज्ञात माल", { products: devaProducts, stock: devaStock, today: "2025-06-10" });
+  assert.equal(r.events.length, 0);
+  assert.ok(r.unresolved.some((u) => u.includes("पैकेट")), "unresolved text must keep the original script so the owner can see what was unreadable");
+});
+
 // ── Simulation: compare decisions, not just one number ────────────────────
 const base = { stock: 6, dailyRate: 2, dailySd: 1.2, leadTimeDays: 6, horizonDays: 21, unitPrice: 400, sellPrice: 799, reorderLevel: 5, runs: 300, seed: 11 };
 

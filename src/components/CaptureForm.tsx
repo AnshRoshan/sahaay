@@ -18,6 +18,7 @@ export default function CaptureForm() {
   const router = useRouter();
   const [text, setText] = useState("");
   const [channel, setChannel] = useState<"message" | "voice">("message");
+  const [voiceLang, setVoiceLang] = useState("en-IN");
   const [capture, setCapture] = useState<CaptureRecord | null>(null);
   const [accept, setAccept] = useState<Record<number, boolean>>({});
   const [qty, setQty] = useState<Record<number, string>>({});
@@ -33,7 +34,7 @@ export default function CaptureForm() {
       return;
     }
     const rec = new Ctor();
-    rec.lang = "en-IN";
+    rec.lang = voiceLang;
     rec.interimResults = false;
     rec.onresult = (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => {
       setText(String(e.results[0]?.[0]?.transcript ?? ""));
@@ -112,8 +113,20 @@ export default function CaptureForm() {
             {busy ? "Reading…" : "Read it"}
           </button>
           <button disabled={busy} onClick={startVoice} className="rounded-lg border border-slate-300 px-3.5 py-2 font-medium text-slate-700 hover:bg-slate-50">🎤 Speak instead</button>
+          <label className="flex items-center gap-1.5 text-xs text-slate-500">
+            Hearing
+            <select value={voiceLang} onChange={(e) => setVoiceLang(e.target.value)} className="rounded border border-slate-300 bg-white px-1.5 py-1 text-xs">
+              <option value="en-IN">English (India)</option>
+              <option value="hi-IN">हिन्दी</option>
+            </select>
+          </label>
           <button onClick={() => setText(EXAMPLE)} className="rounded-lg px-3 py-2 text-slate-500 underline">Use example</button>
         </div>
+        <p className="mt-1 text-xs text-slate-500">
+          Browser speech recognition is set to one language at a time, so a Hindi-English mix gets
+          words wrong — it especially mishears numbers. Check the line above before pressing "Read it";
+          you can edit it. Nothing is recorded until you confirm.
+        </p>
         <p className="mt-1 text-xs text-slate-500">{msg}</p>
       </div>
 

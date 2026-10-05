@@ -34,8 +34,9 @@ async function productCatalogue() {
 }
 
 /**
- * Parse a message. Deterministic rules only — an optional model parse must be rejected
- * unless every number it produced is grounded in the message text (see parseWithModel).
+ * Parse a message. Deterministic rules only — there is no model path here yet. If one is ever
+ * added it may only emit spans into `rawText` that the code re-reads and verifies; a model must
+ * never state a quantity, because a wrong parse becomes permanent ledger history.
  */
 export async function captureMessage(rawText: string, channel: "message" | "voice" = "message"): Promise<CaptureRecord> {
   const text = rawText.trim();

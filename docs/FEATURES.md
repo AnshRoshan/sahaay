@@ -37,7 +37,7 @@ Legend: ✅ implemented and exercised in the build sandbox · 🔌 adapter imple
 | J5 | Future-dated events flagged so a wrongly-dated snapshot cannot silently discard history | ✅ `summarise(events, asOf)` |
 | J6 | Inventory CSV export recorded as a dated `stock_count` baseline instead of an overwrite | ✅ `ingest.ts` |
 | J7 | `/ledger` page: derived state per product, balance trail, conflicts, negative stock, recent events | ✅ |
-| J8 | Typed + spoken capture ("Kal 30 blue shirt aaya aur 3 shirt bik gaye"), Hindi/Urdu + English number words | ✅ `/capture` |
+| J8 | Typed + spoken capture ("Kal 30 blue shirt aaya aur 3 shirt bik gaye"), Hindi/Urdu + English number words. Devanagari script tokenises correctly now (marks kept with their consonant). Browser speech recognition is **single-language** — pick English(India) or हिन्दी per session; Hindi-English mixes get numbers wrong, so the transcript is editable before parsing | ✅ `/capture` |
 | J9 | **Claim labels** on every extracted fact: CONFIRMED / INFERRED / MISSING / CONFLICTING, with the reason shown verbatim | ✅ `ClaimStatusBadge` |
 | J10 | Human confirmation gate: a MISSING or CONFLICTING line is refused, not filled in; per-line corrections supported | ✅ `confirmCapture` |
 | J11 | Unmatched text is surfaced to the owner instead of being dropped silently | ✅ |

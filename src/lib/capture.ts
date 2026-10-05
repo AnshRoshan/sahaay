@@ -70,7 +70,7 @@ export function detectIntent(text: string): CaptureIntent {
  * count, and treating it as one would invent inventory.
  */
 export function quantityNearProduct(clause: string, productId: string, productName: string): number | null {
-  const tokens = clause.split(/[^a-z0-9]+/i).map((t) => t.toLowerCase()).filter(Boolean);
+  const tokens = clause.split(/[^\p{L}\p{N}\p{M}]+/u).map((t) => t.toLowerCase()).filter(Boolean);
   const nameParts = new Set([...nameTokens(productName), ...nameTokens(productId)]);
   const isName = (t: string) => nameParts.has(t) || PACKAGING.has(t);
   const isNumber = (t: string) => /^-?\d+(\.\d+)?$/.test(t) || UNITS[t] !== undefined;
@@ -122,7 +122,7 @@ const PACKAGING = new Set(["carton", "cartons", "packet", "packets", "pack", "pa
 const nameTokens = (name: string) =>
   name
     .toLowerCase()
-    .split(/[^a-z0-9]+/)
+    .split(/[^\p{L}\p{N}\p{M}]+/u)
     .filter((w) => w.length > 2 && !/\d/.test(w) && !PACKAGING.has(w));
 
 /** Word overlap against known products; conservative but tolerant of pack-size suffixes. */

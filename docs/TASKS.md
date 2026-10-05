@@ -53,7 +53,13 @@
 - [x] Tests: ledger reducer/conflicts/future-dating, capture parser, simulator invariants
 - [ ] **Run the interview with the friend on the capture flow** — does he actually speak these
       sentences, or does he prefer tapping quantities?
-- [ ] Model-assisted capture parsing behind the grounding gate (rules-only today; honest about it)
+- [ ] Model-assisted capture parsing behind the grounding gate (rules-only today; honest about it).
+      Research says gate this behind the interview: browser ASR is the bigger error source
+      (measured Hinglish WER 27–70%), and an unadapted Gemma-class model scores ~62 F1 on
+      code-mixed NER vs ~79 for a fine-tuned encoder. If the model path is ever added it may emit
+      **spans only** — `rawText.slice(start, end)` must match verbatim and the existing `UNITS`
+      resolver re-reads the number, so the model never states a quantity (see `parseWithModel`,
+      still unimplemented).
 - [ ] Whole-shop simulation across products sharing a cash limit (today's is per-product)
 - [ ] Receipt/photo OCR for hand-written bills (UdharBook lesson)
 
