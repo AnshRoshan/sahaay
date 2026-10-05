@@ -89,4 +89,9 @@ Legend: ✅ implemented and exercised here · 🔌 adapter implemented, needs ex
 - [`docs/friend-interview.md`](docs/friend-interview.md) · [`docs/demo-script.md`](docs/demo-script.md) · [`docs/article-outline.md`](docs/article-outline.md)
 
 ## Why open source
+- The code is MIT (see [`LICENSE`](LICENSE)).
+- One exception worth knowing before you depend on it: the **TabPFN v2 model weights** are not
+  MIT — they carry the Prior Labs License v1.1 (Apache-2.0 with attribution, commercial use
+  permitted), and the newer non-commercial TabPFN releases are refused at runtime by
+  [`ADR-017`](docs/decisions.md). The service ships disabled; you install the weights yourself.
 Small businesses should be able to own and inspect the intelligence layer that influences their decisions: swap the model, run it locally, read every rule, and keep data on their own machine.
