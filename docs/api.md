@@ -13,6 +13,7 @@ All routes except `/api/health` require the session cookie (when `SAHAAY_ACCESS_
 | `GET /api/capture` | Recent captures with their parse results |
 | `GET /api/ledger` | Read-only ledger: derived state per product with balance trail, conflicts, future-dated events, negative stock, recent events. No write endpoint exists by design. |
 | `GET /api/samples/{sales,inventory,products,suppliers}.csv` | Demo CSVs |
+| `POST /api/recommendations/{id}/receive` `{at?,qty?}` | Record the delivery: appends a `receipt` event correlated to the `order_placed` event by `ref`, sets `arrivedAt`, adds the RECEIVED lifecycle stage |
 | `POST /api/demo/load` `{confirm?}` | Reset + load demo shop + seed history + analyse. **403 unless `DEMO_MODE=1`**; 409 `needsConfirmation` with the row count when the database already holds records |
 | `POST /api/demo/simulate` `{days}` | **Simulation**: advance clock, deliver orders, measure outcomes, re-analyse. **403 unless `DEMO_MODE=1`** |
 | `POST /api/analysis/run` | Re-run forecast → risk → recommendations |

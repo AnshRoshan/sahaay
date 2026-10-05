@@ -5,7 +5,7 @@ import { ledgerOverview } from "@/lib/server/ledger";
 export const dynamic = "force-dynamic";
 
 const KIND_LABEL: Record<string, string> = {
-  stock_count: "Count", sale: "Sold", receipt: "Received", adjustment: "Adjusted", return: "Returned",
+  stock_count: "Count", sale: "Sold", receipt: "Received", adjustment: "Adjusted", return: "Returned", order_placed: "Ordered",
 };
 
 /**
@@ -99,8 +99,12 @@ export default async function LedgerPage() {
                 <Td className="whitespace-nowrap">{e.at}</Td>
                 <Td>{e.productName}</Td>
                 <Td>{KIND_LABEL[e.kind] ?? e.kind}</Td>
-                <Td className={e.kind === "sale" ? "text-red-700" : e.kind === "stock_count" ? "" : "text-emerald-700"}>
-                  {e.kind === "stock_count" ? e.qty : `${e.kind === "sale" ? "" : "+"}${e.kind === "sale" ? -Math.abs(e.qty) : e.qty}`}
+                <Td className={e.kind === "sale" ? "text-red-700" : e.kind === "order_placed" ? "text-slate-500" : e.kind === "stock_count" ? "" : "text-emerald-700"}>
+                  {e.kind === "stock_count"
+                    ? e.qty
+                    : e.kind === "order_placed"
+                      ? `${e.qty} committed · not in stock`
+                      : `${e.kind === "sale" ? "" : "+"}${e.kind === "sale" ? -Math.abs(e.qty) : e.qty}`}
                 </Td>
                 <Td><span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-600">{e.source}</span></Td>
                 <Td><div className="max-w-xs truncate text-xs text-slate-500">{e.note ?? "—"}</div></Td>

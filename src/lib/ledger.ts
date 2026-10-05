@@ -11,9 +11,13 @@ export type LedgerEventKind =
   | "sale" // units sold (negative)
   | "receipt" // stock received from a supplier (positive)
   | "adjustment" // manual correction, e.g. damaged goods
-  | "return"; // customer return (positive)
+  | "return" // customer return (positive)
+  | "order_placed"; // a purchase order left the shop — commits cash, moves no stock yet
 
 export type EventSource = "csv" | "pos" | "message" | "voice" | "owner" | "system";
+
+/** Kinds that change on-hand stock. `order_placed` is deliberately absent: goods are not in the shop yet. */
+const SIGNED_KINDS: LedgerEventKind[] = ["sale", "receipt", "adjustment", "return"];
 
 /** An immutable fact. `qty` is signed for sale/receipt/adjustment/return; ignored for stock_count. */
 export type LedgerEvent = {
@@ -21,8 +25,7 @@ export type LedgerEvent = {
   productId: string;
   kind: LedgerEventKind;
   /** Units for stock_count; a signed delta for every other kind. */
-  qty: number;
-  /** Business date (YYYY-MM-DD) the event happened on. */
+  qty: number;  /** Business date (YYYY-MM-DD) the event happened on. */
   at: string;
   source: EventSource;
   /** Free text: supplier name, "voice note", "damaged in storage". */
@@ -30,8 +33,6 @@ export type LedgerEvent = {
   /** Correlation id: capture id, import id, decision id. Never mutated. */
   ref?: string;
 };
-
-const SIGNED_KINDS: LedgerEventKind[] = ["sale", "receipt", "adjustment", "return"];
 
 export function deltaOf(e: LedgerEvent): number {
   if (!SIGNED_KINDS.includes(e.kind)) return 0;
@@ -193,8 +194,8 @@ export function validateClaim(draft: Omit<LedgerEvent, "id">, state: LedgerState
     claims.push({ field: "resulting_stock", value: draft.qty, status: CONFIRMED, source: draft.source, reason: "This count replaces the previous baseline." });
   }
 
-  if (draft.kind === "receipt" && opts.supplierOnFile === false) {
-    claims.push({ field: "supplier", value: null, status: INFERRED, source: draft.source, reason: "No supplier matched this delivery; recorded without a supplier name." });
+  if ((draft.kind === "receipt" || draft.kind === "order_placed") && opts.supplierOnFile === false) {
+    claims.push({ field: "supplier", value: null, status: INFERRED, source: draft.source, reason: "No supplier matched this movement; recorded without a supplier name." });
   }
   if (draft.kind !== "stock_count" && opts.moq && Math.abs(draft.qty) > 0 && Math.abs(draft.qty) < opts.moq && draft.kind === "receipt") {
     claims.push({ field: "moq", value: opts.moq, status: INFERRED, source: draft.source, reason: `Received quantity ${Math.abs(draft.qty)} is below the supplier MOQ of ${opts.moq}; fine for a delivery, noted for context.` });
@@ -207,8 +208,10 @@ export function validateClaim(draft: Omit<LedgerEvent, "id">, state: LedgerState
 export type LedgerSummary = {
   products: number;
   events: number;
+  /** Events that move on-hand stock. Purchase orders are excluded: nothing has arrived yet. */
   movements: number;
   counts: number;
+  orders: number;
   conflicts: LedgerConflict[];
   /** Products whose derived quantity is negative — impossible, needs a correction event. */
   negative: { productId: string; quantity: number }[];
@@ -221,8 +224,9 @@ export function summarise(events: LedgerEvent[], asOf?: string): LedgerSummary {
   return {
     products: state.size,
     events: events.length,
-    movements: events.filter((e) => e.kind !== "stock_count").length,
+    movements: events.filter((e) => SIGNED_KINDS.includes(e.kind)).length,
     counts: events.filter((e) => e.kind === "stock_count").length,
+    orders: events.filter((e) => e.kind === "order_placed").length,
     conflicts: detectConflicts(events),
     negative: [...state.values()].filter((s) => s.quantity < 0).map((s) => ({ productId: s.productId, quantity: s.quantity })),
     futureDated: [...state.values()].filter((s) => s.futureDated && s.lastEventAt).map((s) => ({ productId: s.productId, lastEventAt: s.lastEventAt as string })),

@@ -8,6 +8,7 @@ import { validateOrder } from "@/lib/validation";
 import type { Action, Calculation } from "@/lib/types";
 import { getAsOf } from "./engine";
 import { HttpError } from "./http";
+import { appendEvents } from "./ledger";
 import { loadRules } from "./rules";
 
 export type DecideBody = {
@@ -101,16 +102,80 @@ export async function decide(id: string, body: DecideBody) {
   return { recommendation: updated, decision };
 }
 
-export async function markExecuted(id: string) {
+/**
+ * The owner says they placed the order. This records a purchase order as an event — it moves no
+ * stock, because nothing has arrived. Event ids are derived from the decision id so a double click
+ * cannot create two orders against the same cash.
+ */
+export async function markExecuted(id: string, opts: { at?: string } = {}) {
   const rec = await getRecOr404(id);
   if (rec.status !== "approved" && rec.status !== "modified") throw new HttpError(409, "Only approved decisions can be marked as ordered.");
-  await db.update(s.decisions).set({ executedAt: new Date() }).where(eq(s.decisions.recommendationId, id));
+  const [decision] = await db.select().from(s.decisions).where(eq(s.decisions.recommendationId, id));
+  if (!decision?.productId) throw new HttpError(422, "This decision has no product to order against.");
+  const qty = decision.approvedQty ?? decision.recommendedQty;
+  if (qty === null || qty <= 0) throw new HttpError(422, "There is no ordered quantity to record.");
+  if (decision.executedAt) throw new HttpError(409, "This order is already marked as placed.");
+
+  const at = opts.at ?? (await getAsOf());
+  await appendEvents([
+    {
+      id: `order_${decision.id}`,
+      productId: decision.productId,
+      kind: "order_placed",
+      qty,
+      at,
+      source: "owner",
+      note: `Purchase order placed${decision.supplierId ? ` with supplier ${decision.supplierId}` : ""} (${qty} units)`,
+      ref: `decision_${decision.id}`,
+    },
+  ]);
+  await db.update(s.decisions).set({ executedAt: new Date(), orderedAtDate: at }).where(eq(s.decisions.id, decision.id));
   const [u] = await db
     .update(s.recommendations)
-    .set({ status: "executed", updatedAt: new Date(), lifecycle: [...rec.lifecycle, { stage: "EXECUTED", at: new Date().toISOString(), note: "Owner confirmed the order was placed" }] })
+    .set({ status: "executed", updatedAt: new Date(), lifecycle: [...rec.lifecycle, { stage: "EXECUTED", at: new Date().toISOString(), note: `Owner confirmed the order was placed on ${at}` }] })
     .where(eq(s.recommendations.id, id))
     .returning();
   return u;
+}
+
+/**
+ * The goods arrived. Only here does stock actually move, as a `receipt` event correlated to the
+ * purchase order by `ref`. The date matters: the gap between order and receipt is the supplier's
+ * real lead time, which is what replaces the "fastest delivery" assumption.
+ */
+export async function markReceived(id: string, opts: { at?: string; qty?: number } = {}) {
+  const rec = await getRecOr404(id);
+  const [decision] = await db.select().from(s.decisions).where(eq(s.decisions.recommendationId, id));
+  if (!decision?.productId) throw new HttpError(422, "This decision has no product to receive against.");
+  if (!decision.executedAt) throw new HttpError(409, "Mark the order as placed first — a receipt has to arrive against a purchase order.");
+  if (decision.arrivedAt) throw new HttpError(409, "These goods are already recorded as received.");
+
+  const ordered = decision.approvedQty ?? decision.recommendedQty ?? 0;
+  const qty = opts.qty ?? ordered;
+  if (!Number.isFinite(qty) || qty <= 0) throw new HttpError(422, "Received quantity must be a positive number of units.");
+  const at = opts.at ?? (await getAsOf());
+  if (at < (decision.orderedAtDate ?? "")) throw new HttpError(422, `Goods cannot arrive (${at}) before the order was placed (${decision.orderedAtDate}).`);
+
+  const events: Parameters<typeof appendEvents>[0] = [
+    {
+      id: `receipt_${decision.id}`,
+      productId: decision.productId,
+      kind: "receipt",
+      qty,
+      at,
+      source: "owner",
+      note: qty === ordered ? `Delivery received for order ${decision.id}` : `Partial/over delivery: ordered ${ordered}, received ${qty}`,
+      ref: `decision_${decision.id}`,
+    },
+  ];
+  await appendEvents(events);
+  await db.update(s.decisions).set({ arrivedAt: at, receivedQty: qty }).where(eq(s.decisions.id, decision.id));
+  const [u] = await db
+    .update(s.recommendations)
+    .set({ updatedAt: new Date(), lifecycle: [...rec.lifecycle, { stage: "RECEIVED", at: new Date().toISOString(), note: `${qty} unit(s) received on ${at}` }] })
+    .where(eq(s.recommendations.id, id))
+    .returning();
+  return { recommendation: u, receivedQty: qty, orderedQty: ordered };
 }
 
 // ───────────────────────── Preference learning ─────────────────────────

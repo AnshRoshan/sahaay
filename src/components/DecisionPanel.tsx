@@ -12,7 +12,7 @@ export default function DecisionPanel({
 }: {
   id: string; status: string; abstain: boolean; needsInfo: string[]; action: Act; alternatives: Act[];
   productName: string; supplierNames: Record<string, string>;
-  decision: { kind: string; recommendedQty: number | null; approvedQty: number | null; reason: string | null; supplierId: string | null; unitPrice: number | null; leadTimeDays: number | null } | null;
+  decision: { kind: string; recommendedQty: number | null; approvedQty: number | null; reason: string | null; supplierId: string | null; unitPrice: number | null; leadTimeDays: number | null; orderedAtDate: string | null; arrivedAt: string | null; receivedQty: number | null } | null;
 }) {
   const router = useRouter();
   const isOrder = action.kind === "order";
@@ -78,8 +78,10 @@ export default function DecisionPanel({
               <pre className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-800">{draft(q, decision?.supplierId, decision?.unitPrice, decision?.leadTimeDays)}</pre>
               <button onClick={() => { navigator.clipboard.writeText(draft(q, decision?.supplierId, decision?.unitPrice, decision?.leadTimeDays)); setCopied(true); }} className="mt-1 text-xs font-medium text-indigo-700 hover:underline">{copied ? "Copied ✓" : "Copy message"}</button>
             </div>
-            {status !== "executed" && (
-              <button disabled={busy} onClick={async () => { setBusy(true); await fetch(`/api/recommendations/${id}/execute`, { method: "POST" }); router.refresh(); setBusy(false); }} className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 font-medium text-slate-800 hover:bg-slate-50">I placed this order ✓</button>
+            {status !== "executed" ? (
+              <button disabled={busy} onClick={async () => { setBusy(true); const r = await fetch(`/api/recommendations/${id}/execute`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); if (!r.ok) setErr((await r.json().catch(() => ({})))?.error ?? "Could not record the order."); router.refresh(); setBusy(false); }} className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 font-medium text-slate-800 hover:bg-slate-50">I placed this order ✓</button>
+            ) : (
+              <OrderArrived id={id} orderedQty={q} orderedAt={decision?.orderedAtDate ?? null} arrivedAt={decision?.arrivedAt} receivedQty={decision?.receivedQty ?? null} onDone={() => router.refresh()} />
             )}
           </>
         )}
@@ -149,6 +151,61 @@ export default function DecisionPanel({
         </button>
         <button disabled={busy} onClick={() => submit("rejected")} className="rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-700 hover:bg-slate-50">Reject</button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Purchase-order completion. "I placed this order" records an order that moves no stock; this
+ * records the delivery, which is the only moment stock changes — and the gap between the two is
+ * the supplier's real lead time, which replaces the "fastest delivery" assumption in ADR-010.
+ */
+function OrderArrived({ id, orderedQty, orderedAt, arrivedAt, receivedQty, onDone }: {
+  id: string; orderedQty: number; orderedAt?: string | null; arrivedAt?: string | null; receivedQty?: number | null; onDone: () => void;
+}) {
+  const [at, setAt] = useState(orderedAt ?? "");
+  const [qty, setQty] = useState(String(orderedQty));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const leadDays = arrivedAt && orderedAt ? Math.round((Date.parse(arrivedAt) - Date.parse(orderedAt)) / 86400000) : null;
+
+  if (arrivedAt) {
+    return (
+      <div className="rounded-lg bg-teal-50 p-3 text-sm text-teal-900">
+        <div className="font-semibold">Delivered — {receivedQty ?? orderedQty} unit(s) received on {arrivedAt}</div>
+        {leadDays !== null && <div className="mt-0.5 text-teal-800">Actual lead time for this order: {leadDays} day{leadDays === 1 ? "" : "s"} (supplier promised {orderedAt ? "" : "no date"}). Sahaay learns the real figure from deliveries like this one.</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 p-3">
+      <div className="text-xs font-semibold uppercase text-slate-500">When the goods actually arrived</div>
+      <div className="mt-2 flex flex-wrap items-end gap-2">
+        <label className="text-xs text-slate-600">Date
+          <input type="date" value={at} onChange={(e) => setAt(e.target.value)} className="mt-1 block rounded border border-slate-300 px-2 py-1" />
+        </label>
+        <label className="text-xs text-slate-600">Units received
+          <input type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)} className="mt-1 block w-28 rounded border border-slate-300 px-2 py-1" />
+        </label>
+        <button
+          disabled={busy || !at || !(Number(qty) > 0)}
+          onClick={async () => {
+            setBusy(true); setErr("");
+            const r = await fetch(`/api/recommendations/${id}/receive`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ at, qty: Number(qty) }) });
+            if (!r.ok) setErr(((await r.json().catch(() => ({})))?.error) ?? "Could not record the delivery.");
+            else onDone();
+            setBusy(false);
+          }}
+          className="rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {busy ? "Recording…" : "Goods arrived — add to stock"}
+        </button>
+      </div>
+      {Number(qty) !== orderedQty && Number(qty) > 0 && <div className="mt-1 text-xs text-amber-700">You ordered {orderedQty} but are recording {qty} — noted as a {Number(qty) < orderedQty ? "partial" : "over"} delivery, and stock will move by {qty}.</div>}
+      {err && <div className="mt-1 text-xs text-red-600">{err}</div>}
+      <p className="mt-2 text-xs text-slate-500">Nothing is added to stock until you press this. Sahaay does not assume a delivery happened because an order was approved.</p>
     </div>
   );
 }

@@ -9,7 +9,9 @@ One real person: a friend who runs a small shop. Pain: frequent stockouts of pop
 ## Core loop
 `Capture → Verify → Understand → Predict → Simulate → Explain → Approve → Act → Monitor → Learn`
 
-Lifecycle states (visible in UI): DETECTED → ANALYZED → RECOMMENDED → SIMULATED → VALIDATED → PENDING_APPROVAL → APPROVED/MODIFIED/REJECTED → EXECUTED → MONITORED → OUTCOME_RECORDED (or EXPIRED).
+Lifecycle states (visible in UI): DETECTED → ANALYZED → RECOMMENDED → SIMULATED → VALIDATED → PENDING_APPROVAL → APPROVED/MODIFIED/REJECTED → EXECUTED → RECEIVED → MONITORED → OUTCOME_RECORDED (or EXPIRED).
+EXECUTED means *an order was placed* (an `order_placed` event: commits cash, moves no stock).
+RECEIVED means the goods landed (a `receipt` event) and is the only moment stock increases.
 
 ## Business truth is an event log
 The current stock level is **never written directly**. `ledger_events` is append-only; a

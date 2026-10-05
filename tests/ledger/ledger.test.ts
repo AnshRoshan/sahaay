@@ -177,6 +177,49 @@ test("a Hindi-script message we cannot match is reported verbatim, not dropped",
   assert.ok(r.unresolved.some((u) => u.includes("पैकेट")), "unresolved text must keep the original script so the owner can see what was unreadable");
 });
 
+// ── Purchase orders: placing an order must not move stock ────────────────
+test("an order_placed event is part of the ledger but changes no quantity", () => {
+  const state = reduceEvents([
+    ev({ id: "1", productId: "p", kind: "stock_count", qty: 10, at: "2025-06-01", source: "csv" }),
+    ev({ id: "2", productId: "p", kind: "order_placed", qty: 20, at: "2025-06-02", source: "owner", ref: "decision_7" }),
+  ]);
+  assert.equal(state.get("p")!.quantity, 10, "goods are not in the shop just because they were ordered");
+  assert.equal(deltaOf({ id: "2", productId: "p", kind: "order_placed", qty: 20, at: "2025-06-02", source: "owner" }), 0);
+});
+
+test("the delivery correlated to that order is what adds stock", () => {
+  const state = reduceEvents([
+    ev({ id: "1", productId: "p", kind: "stock_count", qty: 10, at: "2025-06-01", source: "csv" }),
+    ev({ id: "2", productId: "p", kind: "order_placed", qty: 20, at: "2025-06-02", source: "owner", ref: "decision_7" }),
+    ev({ id: "3", productId: "p", kind: "receipt", qty: 20, at: "2025-06-09", source: "owner", ref: "decision_7" }),
+  ]);
+  assert.equal(state.get("p")!.quantity, 30);
+  assert.deepEqual(state.get("p")!.trail.map((t) => [t.kind, t.balance]), [["stock_count", 10], ["order_placed", 10], ["receipt", 30]]);
+});
+
+test("a purchase order is not counted as a stock movement", () => {
+  const s = summarise([
+    ev({ id: "1", productId: "p", kind: "stock_count", qty: 10, at: "2025-06-01", source: "csv" }),
+    ev({ id: "2", productId: "p", kind: "order_placed", qty: 20, at: "2025-06-02", source: "owner" }),
+    ev({ id: "3", productId: "p", kind: "sale", qty: 4, at: "2025-06-03", source: "csv" }),
+  ]);
+  assert.equal(s.orders, 1);
+  assert.equal(s.movements, 1, "only the sale moved stock; the count set a baseline and the order moved nothing");
+});
+
+test("an order without a quantity is refused like any other claim", () => {
+  const draft = validateClaim({ productId: "p", kind: "order_placed", qty: 0, at: "2025-06-02", source: "owner" }, undefined);
+  assert.equal(draft.readyToWrite, false);
+  assert.ok(draft.claims.some((c) => c.field === "quantity" && c.status === "MISSING"));
+});
+
+test("ordering does not trip the below-zero guard, since stock is untouched", () => {
+  const state = reduceEvents([ev({ id: "1", productId: "p", kind: "stock_count", qty: 2, at: "2025-06-01", source: "csv" })]).get("p");
+  const draft = validateClaim({ productId: "p", kind: "order_placed", qty: 50, at: "2025-06-02", source: "owner" }, state);
+  assert.equal(draft.readyToWrite, true);
+  assert.equal(draft.claims.some((c) => c.field === "resulting_stock"), false);
+});
+
 // ── Simulation: compare decisions, not just one number ────────────────────
 const base = { stock: 6, dailyRate: 2, dailySd: 1.2, leadTimeDays: 6, horizonDays: 21, unitPrice: 400, sellPrice: 799, reorderLevel: 5, runs: 300, seed: 11 };
 

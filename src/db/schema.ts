@@ -81,9 +81,9 @@ export const ledgerEvents = pgTable(
   {
     id: text("id").primaryKey(),
     productId: text("product_id").notNull(),
-    /** stock_count | sale | receipt | adjustment | return */
+    /** stock_count | sale | receipt | adjustment | return | order_placed */
     kind: text("kind").notNull(),
-    /** Units for stock_count; a signed delta for every other kind. */
+    /** Units for stock_count; a signed delta for stock movements; ordered quantity for order_placed (which moves nothing). */
     qty: integer("qty").notNull(),
     /** Business date the event happened on. */
     at: date("at", { mode: "string" }).notNull(),
@@ -223,7 +223,11 @@ export const decisions = pgTable("decisions", {
   decisionDate: date("decision_date", { mode: "string" }).notNull(), // business date (as-of)
   outcomeWindowDays: integer("outcome_window_days").notNull().default(7),
   executedAt: timestamp("executed_at"),
+  /** Business date the purchase order left the shop. The order→arrivedAt gap is learned lead time. */
+  orderedAtDate: date("ordered_at_date", { mode: "string" }),
   arrivedAt: date("arrived_at", { mode: "string" }),
+  /** Units that actually landed — may differ from approvedQty on a partial or over delivery. */
+  receivedQty: integer("received_qty"),
   decidedAt: timestamp("decided_at").defaultNow().notNull(),
 });
 

@@ -64,7 +64,8 @@ Legend: ✅ implemented and exercised in the build sandbox · 🔌 adapter imple
 | D1 | Approve / Modify (quantity, supplier) / Reject with reason | ✅ |
 | D2 | Live re-validation while editing; block → refuse, warn → explicit confirm | ✅ |
 | D3 | Order message draft (copy) — Sahaay never contacts suppliers | ✅ |
-| D4 | "I placed this order" (EXECUTED) | ✅ |
+| D4 | "I placed this order" → EXECUTED + an append-only `order_placed` event (commits cash, moves **no** stock; id derived from the decision so a double click cannot order twice) | ✅ |
+| D4b | "Goods arrived" → RECEIVED + a correlated `receipt` event, with the date and the units that actually landed (partial/over delivery supported). The order→receipt gap is the raw material for learned lead time | ✅ |
 | D5 | Decision lifecycle visible in UI — only stages that genuinely happened are stamped (an abstaining rec shows no SIMULATED/VALIDATED chip) | ✅ |
 | D6 | Decision history: recommended vs human vs outcome | ✅ |
 | D7 | Outcome monitoring: actual vs forecast, verdicts, comparison of owner's edit vs recommendation. Windows where the available stock all sold are **censored** (recorded sales understate demand), so those get an `indeterminate` verdict and are excluded from forecast-bias learning | ✅ `outcomes-core.ts` |

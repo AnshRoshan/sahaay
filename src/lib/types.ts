@@ -252,6 +252,7 @@ export const LIFECYCLE_STAGES = [
   "PENDING_APPROVAL", // explain + human approves
   "APPROVED",
   "EXECUTED", // act
+  "RECEIVED", // the goods physically arrived; only now does stock move
   "MONITORED",
   "OUTCOME_RECORDED", // learn
 ] as const;

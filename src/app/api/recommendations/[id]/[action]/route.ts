@@ -5,7 +5,7 @@ import { explainTemplate, factsText, type ExplainableRec } from "@/lib/explain";
 import type { Action } from "@/lib/types";
 import { HttpError, handle } from "@/lib/server/http";
 import { groundedAnswer } from "@/lib/server/llm";
-import { decide, getRecOr404, markExecuted, previewValidation, type DecideBody } from "@/lib/server/memory";
+import { decide, getRecOr404, markExecuted, markReceived, previewValidation, type DecideBody } from "@/lib/server/memory";
 import { Tracer } from "@/lib/server/observability";
 import { researchSuppliers } from "@/lib/server/research";
 
@@ -24,7 +24,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string; ac
       case "validate":
         return { validation: await previewValidation(id, Number(body.quantity), body.supplierId as string | undefined) };
       case "execute":
-        return { recommendation: await markExecuted(id) };
+        return { recommendation: await markExecuted(id, { at: typeof body.at === "string" ? body.at : undefined }) };
+      case "receive":
+        if (body.qty !== undefined && !Number.isFinite(Number(body.qty))) throw new HttpError(400, "qty must be a number");
+        return markReceived(id, { at: typeof body.at === "string" ? body.at : undefined, qty: body.qty === undefined ? undefined : Number(body.qty) });
       case "research": {
         const rec = await getRecOr404(id);
         if (!rec.productId) throw new HttpError(422, "Research needs a product");

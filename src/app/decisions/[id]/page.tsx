@@ -86,7 +86,7 @@ export default async function DecisionDetail({ params }: { params: Promise<{ id:
             <DecisionPanel
               id={rec.id} status={rec.status} abstain={rec.abstain} needsInfo={rec.needsInfo} action={action} alternatives={alternatives}
               productName={product?.name ?? rec.title} supplierNames={names}
-              decision={decision ? { kind: decision.kind, recommendedQty: decision.recommendedQty, approvedQty: decision.approvedQty, reason: decision.reason, supplierId: decision.supplierId, unitPrice: decision.unitPrice, leadTimeDays: decision.leadTimeDays } : null}
+              decision={decision ? { kind: decision.kind, recommendedQty: decision.recommendedQty, approvedQty: decision.approvedQty, reason: decision.reason, supplierId: decision.supplierId, unitPrice: decision.unitPrice, leadTimeDays: decision.leadTimeDays, orderedAtDate: decision.orderedAtDate, arrivedAt: decision.arrivedAt, receivedQty: decision.receivedQty } : null}
             />
           </Card>
           {outcome && (
