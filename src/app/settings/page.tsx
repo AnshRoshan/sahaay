@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function Settings() {
   const rules = await loadRules();
-  const integrations = integrationStatus();
+  const integrations = await integrationStatus();
   return (
     <div className="space-y-6">
       <PageHeader title="Business rules & permissions" subtitle="These rules are enforced by code on every recommendation and every human edit. The AI cannot override them." />

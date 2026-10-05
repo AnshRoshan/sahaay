@@ -1,6 +1,9 @@
 # Demo script (≈ 5 minutes)
 
-Preparation: open the app, **Overview → Reset demo shop**. Optional: start Ollama (Gemma) and set `GEMMA_BASE_URL`.
+Preparation: run the app with `DEMO_MODE=1` (the demo endpoints return 403 without it, because loading
+the demo truncates every table and the time-machine writes synthetic movements into the same ledger as
+real data). Then open the app → **Overview → Reset demo shop**, and confirm the reset prompt. Optional:
+start Ollama (Gemma) and set `GEMMA_BASE_URL`. Use a database that holds demo data only.
 
 **Scene 1 — The problem (0:00).** Show the messy data (Import page after load): sales records, products, suppliers, plus warnings. "My friend has the data, but not the time to analyse it."
 

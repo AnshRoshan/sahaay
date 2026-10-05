@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 const FLOW = ["Business data", "Detect + Forecast", "AI reasoning (Gemma)", "Validation (rules)", "Recommendation", "Human approval", "Action", "Outcome", "Decision memory"];
 
 export default async function System() {
-  const [runs, cases, integrations] = [await getRecentRuns(10), runSafetyCases(), integrationStatus()];
+  const [runs, cases, integrations] = [await getRecentRuns(10), runSafetyCases(), await integrationStatus()];
   const passed = cases.filter((c) => c.pass).length;
   return (
     <div className="space-y-6">

@@ -18,7 +18,7 @@ Legend: ✅ implemented and exercised in the build sandbox · 🔌 adapter imple
 | # | Feature | Status |
 |---|---|---|
 | B1 | Demand forecast: 7-day expected, range, confidence, trend | ✅ (local ensemble) |
-| B2 | TabPFN structured prediction with quantiles + auto-fallback | 🔌 `services/tabpfn`, `forecast-service.ts` |
+| B2 | TabPFN structured prediction with quantiles + auto-fallback. Weights pinned to the v2 line for licensing; **Rules & settings probes the running service** instead of trusting the env var | 🔌 `services/tabpfn`, `forecast-service.ts` |
 | B3 | Forecast evaluation: rolling-origin MAE/RMSE vs naive baseline, interval coverage | ✅ `/forecasts`, `/api/evaluation` |
 | B4 | Inventory risk engine: SAFE/WATCH/HIGH/CRITICAL, stockout probability, days of cover | ✅ |
 | B5 | Signals: stockout risk, slow-moving, demand surge, supplier saving | ✅ |
@@ -95,11 +95,11 @@ Legend: ✅ implemented and exercised in the build sandbox · 🔌 adapter imple
 | G1 | Workflows: weekly review, morning briefing, monthly slow-movers, outcome check | ✅ |
 | G2 | Persisted step state + retries with backoff + failure capture | ✅ |
 | G3 | Schedules + `/api/cron/tick` (Render cron / any scheduler) | ✅ |
-| G4 | Temporal worker, workflows, activities, schedules | 🔌 `services/worker` |
+| G4 | Temporal worker | 🔭 reference code in `services/worker`, **not deployed** — the in-app durable runner (G1–G3) is what actually runs schedules |
 | G5 | Morning briefing (text) with attention-time estimate | ✅ |
 | G6 | Voice briefing: ElevenLabs TTS / browser fallback | 🔌 / ✅ |
 | G7 | Observability: per-run spans in-app (agent_runs) | ✅ |
-| G8 | Sentry error forwarding | 🔌 |
+| G8 | Sentry error forwarding | 🔌 adapter exists; deliberately off — forwarding errors would ship the owner's business data to a third party |
 | G9 | Owner auth (access code, signed cookie) + open-mode warning. `SESSION_SECRET` missing in production is a hard error rather than the published dev fallback, and `/api/cron/tick` requires `CRON_SECRET` instead of falling back to session auth | ✅ |
 | G10 | Render blueprint, Dockerfile, docker-compose. Paid Postgres plan (free plan self-deletes at 30 days); migrations committed under `drizzle/` and applied with `drizzle-kit migrate`, never from `buildCommand` | ✅ (files) |
 | G11 | `/api/health` | ✅ |

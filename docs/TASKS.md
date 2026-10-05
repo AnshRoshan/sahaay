@@ -19,7 +19,9 @@
 - [x] Backtest harness vs baseline
 - [x] Stockout risk engine
 - [x] Signals (slow-moving, surge, supplier saving)
-- [~] TabPFN service + client (run `services/tabpfn`, set `TABPFN_URL`)
+- [~] TabPFN service + client (run `services/tabpfn`, set `TABPFN_URL`). Weights pinned to
+      `tabpfn>=2.0,<3`: the newer line is non-commercially licensed and ADR-017 refuses to serve it.
+      Never benchmarked against the local engine — see docs/evaluation.md
 
 ## Phase 3 — Decision engine
 - [x] Recommendation objects, evidence, calculations, alternatives
@@ -71,7 +73,10 @@
 
 ## Phase 7 — Infrastructure
 - [x] Workflow runner, schedules, tick endpoint
-- [~] Temporal worker (`services/worker`)
+- [x] In-app durable runner + `/api/cron/tick` is the real scheduler
+- [~] Temporal worker (`services/worker`) — reference code, deliberately **not deployed**.
+      Self-hosting needs a server + persistence DB + visibility store, and Temporal Cloud has a
+      $500/mo minimum. Nothing in `src/` depends on it
 - [x] In-app tracing; [~] Sentry forwarding (`SENTRY_DSN`)
 - [x] Auth, Render blueprint, Docker files
 
@@ -85,7 +90,9 @@
 - [x] demo script, article outline
 
 ## Next (post-hackathon, in order)
-1. [ ] Deploy to Render; set `SAHAAY_ACCESS_CODE`; verify cron tick
+1. [ ] Deploy to Render; set `SAHAAY_ACCESS_CODE`; verify cron tick. Blueprint now uses a **paid**
+      Postgres plan (free plan self-deletes at 30 days), applies schema with `drizzle-kit migrate`
+      outside the build, keeps `DEMO_MODE=0`, and the cron pinger POSTs with the bearer secret
 2. [ ] Bring up TabPFN + Gemma; compare TabPFN vs local backtest on the friend's data
 3. [ ] Show the simulation table in the morning briefing ("order 20 vs 27")
 4. [ ] Whole-shop simulation across products sharing a cash limit
