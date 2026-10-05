@@ -1,0 +1,26 @@
+# Local full stack: docker compose up --build
+services:
+  db:
+    image: postgres:16
+    environment: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: app_db }
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+  web:
+    build: .
+    depends_on: [db]
+    ports: ["3000:3000"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/app_db
+      GEMMA_BASE_URL: http://ollama:11434
+      GEMMA_MODEL: gemma3:4b
+      TABPFN_URL: http://tabpfn:8001
+  ollama:
+    image: ollama/ollama
+    ports: ["11434:11434"]
+    volumes: [ollama:/root/.ollama]
+    profiles: [ai]
+  tabpfn:
+    build: ./services/tabpfn
+    ports: ["8001:8001"]
+    profiles: [ai]
+volumes: { pgdata: {}, ollama: {} }

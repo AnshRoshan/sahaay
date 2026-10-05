@@ -1,0 +1,43 @@
+# Render Blueprint: web app + Postgres + cron tick. Gemma/TabPFN run as separate services (see services/).
+databases:
+  - name: sahaay-db
+    plan: free
+    databaseName: sahaay
+services:
+  - type: web
+    name: sahaay-web
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npx drizzle-kit push --force && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: { name: sahaay-db, property: connectionString }
+      - key: SAHAAY_ACCESS_CODE
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      - key: GEMMA_BASE_URL
+        sync: false
+      - key: TABPFN_URL
+        sync: false
+      - key: SERPAPI_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+  - type: cron
+    name: sahaay-tick
+    runtime: node
+    schedule: "*/15 * * * *"
+    buildCommand: "true"
+    startCommand: 'curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" "$SAHAAY_URL/api/cron/tick"'
+    envVars:
+      - key: CRON_SECRET
+        fromService: { type: web, name: sahaay-web, envVarKey: CRON_SECRET }
+      - key: SAHAAY_URL
+        sync: false
