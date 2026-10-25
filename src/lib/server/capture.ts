@@ -5,11 +5,12 @@
 import { db } from "@/db";
 import * as s from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
-import { parseCapture, toEvents, type CaptureResult, type ProposedEvent } from "@/lib/capture";
+import { parseCapture, toEvents, type CaptureResult, type ParseHints, type ProposedEvent } from "@/lib/capture";
 import { consolidateOffers } from "@/lib/analysis";
 import { getAsOf } from "./engine";
 import { HttpError } from "./http";
 import { appendEvents, derivedStock } from "./ledger";
+import { chatComplete, llmConfigured } from "./llm";
 
 export type CaptureRecord = {
   id: string;
@@ -34,18 +35,54 @@ async function productCatalogue() {
 }
 
 /**
- * Parse a message. Deterministic rules only — there is no model path here yet. If one is ever
- * added it may only emit spans into `rawText` that the code re-reads and verifies; a model must
- * never state a quantity, because a wrong parse becomes permanent ledger history.
+ * Model-assisted segmentation, behind the grounding gate. The model may only emit spans that
+ * already exist in the message: movement segments and, inside them, the words naming the
+ * product. It never states a quantity (a wrong parse becomes permanent ledger history) — the
+ * number is still read from the owner's own words by the deterministic parser, and any
+ * malformed, non-JSON, or non-verbatim answer is discarded entirely in favour of rules-only.
  */
+const SPAN_SYSTEM = `You help segment a shop owner's inventory message into movements.
+Return ONLY a JSON array, one object per movement:
+[{"text": "<verbatim substring of the message describing ONE movement>", "product": "<verbatim substring naming the product, or null>"}]
+Rules: copy the text EXACTLY from the message — never rephrase, translate, or add characters.
+The product field must also be copied exactly from the message. Never output quantities.
+If the message contains no inventory movement, return [].`;
+
+async function modelParseHints(text: string): Promise<ParseHints | null> {
+  if (!llmConfigured()) return null;
+  try {
+    const out = await chatComplete(
+      [
+        { role: "system", content: SPAN_SYSTEM },
+        { role: "user", content: text },
+      ],
+      8000,
+    );
+    if (!out) return null;
+    const json = JSON.parse(out.replace(/^```(?:json)?/gm, "").replace(/```$/gm, "").trim());
+    if (!Array.isArray(json) || json.length === 0) return null;
+    const clauses: string[] = [];
+    const productHints: (string | undefined)[] = [];
+    for (const seg of json) {
+      if (typeof seg?.text !== "string" || !seg.text) return null;
+      clauses.push(seg.text);
+      productHints.push(typeof seg?.product === "string" && seg.product ? seg.product : undefined);
+    }
+    return { clauses, productHints };
+  } catch {
+    return null; // any model misbehaviour degrades to the deterministic parser, silently
+  }
+}
+
+/** Parse a message: rules first; the model (when configured) may only propose verbatim spans. */
 export async function captureMessage(rawText: string, channel: "message" | "voice" = "message"): Promise<CaptureRecord> {
   const text = rawText.trim();
   if (!text) throw new HttpError(400, "Nothing to read — type or speak the update first.");
   if (text.length > 2000) throw new HttpError(413, "Message too long (2000 characters max)");
   const asOf = await getAsOf();
-  const [{ prods, offersByProduct }, derived] = await Promise.all([productCatalogue(), derivedStock(asOf)]);
+  const [{ prods, offersByProduct }, derived, hints] = await Promise.all([productCatalogue(), derivedStock(asOf), modelParseHints(rawText.trim())]);
   const stock = Object.fromEntries(Object.entries(derived).map(([k, v]) => [k, v.quantity]));
-  const parsed = parseCapture(text, { products: prods, stock, today: asOf });
+  const parsed = parseCapture(text, { products: prods, stock, today: asOf }, hints ?? undefined);
 
   // Label each proposal against supplier terms on file (MOQ / known suppliers).
   for (const e of parsed.events) {

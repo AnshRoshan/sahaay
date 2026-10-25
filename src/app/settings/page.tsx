@@ -13,6 +13,11 @@ export default async function Settings() {
       <PageHeader title="Business rules & permissions" subtitle="These rules are enforced by code on every recommendation and every human edit. The AI cannot override them." />
       <Card><SettingsForm rules={rules} /></Card>
       <Card>
+        <h2 className="font-semibold text-slate-900">Your data</h2>
+        <p className="mt-1 text-sm text-slate-700">Download everything Sahaay knows — products, suppliers, sales, the full event ledger, decisions, outcomes and rules — as one JSON file. The ledger is the source of record; nothing is locked in.</p>
+        <a href="/api/export" className="mt-3 inline-block rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50">⬇ Download full export (JSON)</a>
+      </Card>
+      <Card>
         <h2 className="font-semibold text-slate-900">Permissions</h2>
         <ul className="mt-2 space-y-1 text-sm text-slate-700">
           <li>✓ Sahaay can <b>read</b> your uploaded data and <b>propose</b> actions.</li>

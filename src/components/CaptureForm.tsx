@@ -133,7 +133,13 @@ export default function CaptureForm() {
       {capture && (
         <div className="space-y-3 rounded-xl border border-slate-200 p-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Proposed events — confirm before anything is recorded</div>
-          <p className="text-xs text-slate-500">Source text: “{capture.rawText}”</p>
+          <p className="text-xs text-slate-500">
+            Source text: “{capture.rawText}” ·{" "}
+            {capture.parsed.parseSource === "model-assisted"
+              ? <span className="rounded bg-sky-50 px-1.5 py-0.5 font-semibold text-sky-700">model-assisted</span>
+              : <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-600">parsed by deterministic rules</span>}
+            {capture.parsed.parseSource === "model-assisted" && " — the model only pointed at words in your message (verified word-for-word); all quantities were still read from your own text"}
+          </p>
           {capture.parsed.events.length === 0 && <p className="text-slate-600">I could not find any product in that message, so I have nothing to propose. Nothing was recorded.</p>}
           {capture.parsed.events.map((e, i) => {
             const blocked = e.claims.some((c) => c.status === "MISSING" || c.status === "CONFLICTING") || !e.productId;

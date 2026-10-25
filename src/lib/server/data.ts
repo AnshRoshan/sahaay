@@ -4,6 +4,7 @@ import * as s from "@/db/schema";
 import { desc, eq, inArray, sql } from "drizzle-orm";
 import { backtest, weekdayFactors } from "@/lib/forecast-core";
 import { weekdayOf } from "@/lib/dates";
+import { learnedLeadTimes } from "./leadtime";
 import { getAsOf, loadInputs } from "./engine";
 
 export type RecRow = typeof s.recommendations.$inferSelect;
@@ -128,15 +129,23 @@ export async function getForecastEvaluation() {
 }
 
 export async function getSupplierData() {
-  const [sup, offers, prods] = await Promise.all([db.select().from(s.suppliers), db.select().from(s.supplierOffers), db.select().from(s.products)]);
+  const [sup, offers, prods, learned] = await Promise.all([
+    db.select().from(s.suppliers),
+    db.select().from(s.supplierOffers),
+    db.select().from(s.products),
+    learnedLeadTimes(),
+  ]);
   const pm = new Map(prods.map((p) => [p.id, p.name]));
   const bySup = sup.map((x) => {
     const o = offers.filter((y) => y.supplierId === x.id);
     const leads = o.map((y) => y.leadTimeDays).filter((v): v is number => v !== null);
+    const lt = learned.get(x.id);
     return {
       id: x.id, name: x.name, products: new Set(o.map((y) => y.productId)).size,
       avgLead: leads.length ? Math.round((leads.reduce((a, b) => a + b, 0) / leads.length) * 10) / 10 : null,
       missingLead: o.filter((y) => y.leadTimeDays === null).length,
+      /** What the owner's own deliveries taught us, if anything — shown beside the spreadsheet promise. */
+      learned: lt ? { n: lt.n, medianDays: lt.medianDays, minDays: lt.minDays, maxDays: lt.maxDays, confidence: lt.confidence, overrunDays: lt.overrunDays } : null,
     };
   });
   const byProduct = new Map<string, typeof offers>();

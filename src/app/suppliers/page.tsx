@@ -21,6 +21,15 @@ export default async function Suppliers() {
         {d.suppliers.map((s) => (
           <Card key={s.id}><div className="font-semibold">{s.name}</div><div className="text-xs text-slate-400">ID {s.id}</div>
             <div className="mt-2 text-sm text-slate-700">{s.products} product(s) · avg lead time {s.avgLead ?? "unknown"} d</div>
+            {s.learned ? (
+              <div className="mt-1 text-xs text-slate-600">
+                Measured from your deliveries: median <b>{s.learned.medianDays} d</b> over {s.learned.n} order→arrival pair{s.learned.n === 1 ? "" : "s"} ({s.learned.minDays}–{s.learned.maxDays} d)
+                {s.learned.overrunDays ? ` · runs ${s.learned.overrunDays} d late vs the sheet` : ""}
+                <span className="ml-1 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">{s.learned.confidence === "measured" ? "MEASURED" : s.learned.confidence === "provisional" ? "PROVISIONAL" : "TOO FEW TO TRUST"}</span>
+              </div>
+            ) : (
+              <div className="mt-1 text-xs text-slate-500">No order→arrival pairs recorded yet — the spreadsheet lead time is all we have. Mark orders as placed and goods as arrived to measure it.</div>
+            )}
             {s.missingLead > 0 && <div className="text-xs text-amber-700">⚠ {s.missingLead} offer(s) missing lead time</div>}</Card>
         ))}
       </div>

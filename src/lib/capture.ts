@@ -31,6 +31,20 @@ export type CaptureResult = {
   /** Text we could not attach to any product. Surfaced, never dropped silently. */
   unresolved: string[];
   intent: CaptureIntent;
+  /** How the message was segmented: deterministic rules, or rules assisted by model-proposed spans. */
+  parseSource: "rules" | "model-assisted";
+};
+
+/**
+ * Optional model assistance. The model may only point at text that already exists: movement
+ * segments (`clauses`) and, inside each, the words naming the product. Both must be *verbatim*
+ * substrings — verified here, not trusted. The model never states a quantity, never classifies
+ * the movement, and never names a product outside the catalogue: every number is still read
+ * from the message by `quantityNearProduct`, and every intent by the keyword rules.
+ */
+export type ParseHints = {
+  clauses?: string[];
+  productHints?: (string | undefined)[];
 };
 
 /** Number words in Hindi/Urdu and English. Note teen = 13 (not 3) and do = 2. */
@@ -150,6 +164,7 @@ export function matchProduct(text: string, products: { id: string; name: string 
 /**
  * Parse one owner message into proposed events. Every extracted number is a *claim*:
  * explicit = CONFIRMED, guessed = INFERRED, absent = MISSING. Nothing is written here.
+ * `hints` (optional) are model-proposed spans; anything not verbatim is discarded.
  */
 export function parseCapture(
   text: string,
@@ -159,6 +174,7 @@ export function parseCapture(
     stock: Record<string, number>;
     today?: string;
   },
+  hints?: ParseHints,
 ): CaptureResult {
   const today = opts.today ?? todayStr();
   const lower = text.toLowerCase();
@@ -166,18 +182,39 @@ export function parseCapture(
   const negated = has(lower, NEGATION_WORDS);
   const { at, explicit } = detectDate(text, today);
 
-  // Split on sentence-ish boundaries so one message can carry several movements. A trailing
-  // "aur N x y bik gaye" after "aur" starts a new clause.
-  const clauses = text
-    .split(new RegExp(`[;,]|(?:\\baur\\b|\\band\\b|\\bphir\\b|\\bthen\\b)(?=\\s+(?:${NUM_WORDS}|\\d))`, "i"))
-    .map((c) => c.trim())
-    .filter(Boolean);
+  // Model-proposed segments are only used when every one of them is a verbatim substring of the
+  // message — partial trust in model structure would be worse than none. Otherwise the same
+  // deterministic split applies.
+  const hintClauses = (hints?.clauses ?? []).filter((c) => typeof c === "string" && c.length > 0 && text.includes(c));
+  const useHints = hintClauses.length > 0 && hintClauses.length === (hints?.clauses?.length ?? 0);
+  const clauses = useHints
+    ? hintClauses.map((c) => c.trim()).filter(Boolean)
+    : (() => {
+        const parts = text
+          .split(new RegExp(`[;,]|(?:\\baur\\b|\\band\\b|\\bphir\\b|\\bthen\\b)(?=\\s+(?:${NUM_WORDS}|\\d))`, "i"))
+          .map((c) => c.trim())
+          .filter(Boolean);
+        return parts.length ? parts : [text];
+      })();
   const events: ProposedEvent[] = [];
   const unresolved: string[] = [];
 
-  for (const clause of clauses.length ? clauses : [text]) {
+  for (let ci = 0; ci < clauses.length; ci++) {
+    const clause = clauses[ci];
     const cl = clause.toLowerCase();
-    const m = matchProduct(clause, opts.products);
+    // The model's product span, when verbatim inside this clause, is tried first: it focuses the
+    // matcher on the words the owner used for the item instead of the whole sentence.
+    const hintProduct = useHints ? hints?.productHints?.[ci] : undefined;
+    let m = { id: "", name: "", match: "none" as "exact" | "fuzzy" | "none" };
+    let viaHint = false;
+    if (typeof hintProduct === "string" && hintProduct.length > 0 && clause.includes(hintProduct)) {
+      const mh = matchProduct(hintProduct, opts.products);
+      if (mh.match !== "none") {
+        m = mh;
+        viaHint = true;
+      }
+    }
+    if (m.match === "none") m = matchProduct(clause, opts.products);
     if (m.match === "none") {
       // Keep the text rather than dropping it — the owner must see what we could not read.
       unresolved.push(clause);
@@ -226,6 +263,9 @@ export function parseCapture(
     if (m.match === "fuzzy") {
       claims.push({ field: "product", value: m.name, status: "INFERRED", source: "message", reason: `Product name matched partially to “${m.name}”. Check this is the right item.` });
     }
+    if (viaHint) {
+      claims.push({ field: "product_span", value: hintProduct, status: "INFERRED", source: "message", reason: `The language model pointed at “${hintProduct}” in your message (verified word-for-word); the catalogue matched it to “${m.name}”. The model cannot state quantities — the number is still read from your own words.` });
+    }
     if (isDamage) {
       claims.push({ field: "direction", value: "decrease", status: "CONFIRMED", source: "message", reason: "The message describes damage or loss, so the quantity leaves stock." });
     }
@@ -248,7 +288,7 @@ export function parseCapture(
     });
   }
 
-  return { events, unresolved, intent };
+  return { events, unresolved, intent, parseSource: useHints ? "model-assisted" : "rules" };
 }
 
 /** Turns owner-approved proposals into ledger events. Never called before confirmation. */
