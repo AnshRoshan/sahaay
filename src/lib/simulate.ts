@@ -29,6 +29,19 @@ export type SimInput = {
   inbound?: number;
   /** Units that count as "leftover" (reorder buffer). Below this, no overstock penalty. */
   reorderLevel?: number;
+  /**
+   * Weekday multipliers from the owner's own recent sales (index 0=Sun, shrunk toward 1).
+   * Absent or malformed → a constant daily rate.
+   */
+  weekdayFactors?: number[];
+  /** Weekday (0=Sun) of simulation day 0 (the as-of date) — required to place the factors. */
+  endWeekday?: number;
+  /**
+   * Standard deviation of the supplier's delivery delay in days, measured from the owner's own
+   * deliveries (1.4826 × MAD of order→receipt gaps). Absent/zero → the order always arrives
+   * exactly on time.
+   */
+  leadTimeSd?: number;
   /** Monte Carlo paths per candidate. */
   runs?: number;
   /** Seed for reproducibility. */
@@ -48,7 +61,7 @@ export function makeRng(seed: number): () => number {
 }
 
 /** Box–Muller: daily demand is a count, so we round a normal draw down to whole units. */
-function demandDraw(rand: () => number, mean: number, sd: number): number {
+export function demandDraw(rand: () => number, mean: number, sd: number): number {
   if (sd <= 0.01) return Math.max(0, Math.round(mean));
   const u = Math.max(rand(), 1e-9);
   const v = rand();
@@ -91,9 +104,25 @@ export function simulateOne(i: SimInput, quantity: number): SimRow {
   let totalDemand = 0, totalSold = 0, totalLost = 0, totalLeftover = 0, totalCash = 0, totalLostValue = 0;
   let totalPreDeliveryLost = 0;
 
-  const inboundArrivesDay = Math.max(1, Math.floor(i.leadTimeDays / 2)); // already-in-flight stock lands mid-lead-time
-  const orderArrivesDay = i.leadTimeDays + 1; // ordered today; only after the lead time does it count
+  const weekday =
+    Array.isArray(i.weekdayFactors) &&
+    i.weekdayFactors.length === 7 &&
+    i.weekdayFactors.every((f) => Number.isFinite(f) && f >= 0) &&
+    typeof i.endWeekday === "number"
+      ? i.weekdayFactors
+      : null; // malformed input degrades to a constant rate, never to a wrong multiplier
+  const leadSd = Number.isFinite(i.leadTimeSd) && (i.leadTimeSd as number) > 0.01 ? (i.leadTimeSd as number) : 0;
+
   for (let r = 0; r < runs; r++) {
+    // The delivery day is drawn per future when delay variability is known; the RNG call order is
+    // kept identical across runs so the stream stays deterministic for a given input.
+    const leadZ =
+      leadSd > 0
+        ? Math.sqrt(-2 * Math.log(Math.max(rand(), 1e-9))) * Math.cos(2 * Math.PI * rand())
+        : 0;
+    const lead = Math.max(1, Math.round(i.leadTimeDays + leadZ * leadSd));
+    const inboundArrivesDay = Math.max(1, Math.floor(i.leadTimeDays / 2)); // already-in-flight stock lands mid-lead-time
+    const orderArrivesDay = lead + 1; // ordered today; only after the lead time does it count
     // The new order does NOT exist until orderArrivesDay. Before that only current stock serves demand.
     let stock = Math.max(0, i.stock);
     const inbound = Math.max(0, i.inbound ?? 0);
@@ -107,7 +136,8 @@ export function simulateOne(i: SimInput, quantity: number): SimRow {
       }
       // Credited exactly once, on the day it arrives.
       if (d === orderArrivesDay) stock += quantity;
-      const want = demandDraw(rand, i.dailyRate, i.dailySd);
+      const factor = weekday ? weekday[(i.endWeekday! + d) % 7] : 1;
+      const want = demandDraw(rand, i.dailyRate * factor, i.dailySd);
       demand += want;
       const take = Math.min(stock, want);
       stock -= take;

@@ -1,13 +1,15 @@
 // Decision memory: approve / modify / reject → record → learn preferences.
 import { db } from "@/db";
 import * as s from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { consolidateOffers } from "@/lib/analysis";
 import { isBiasUsable } from "@/lib/outcomes-core";
 import { validateOrder } from "@/lib/validation";
+import { simulateShop, type ShopOutlook, type ShopSimProduct } from "@/lib/shop-sim";
 import type { Action, Calculation } from "@/lib/types";
 import { getAsOf } from "./engine";
 import { HttpError } from "./http";
+import { allocateBudget, budgetCandidateOf, type BudgetCandidate } from "./plan";
 import { appendEvents } from "./ledger";
 import { loadRules } from "./rules";
 
@@ -100,6 +102,111 @@ export async function decide(id: string, body: DecideBody) {
     .returning();
   await relearn();
   return { recommendation: updated, decision };
+}
+
+export type BatchResult = {
+  approved: { id: string; productId: string | null; name: string; quantity: number; downsizedFrom?: number }[];
+  skipped: { productId: string | null; name: string; reason: string }[];
+  committed: number;
+  /** Whole-shop outlook of the funded basket (deferred products included with no order). */
+  outlook: ShopOutlook | null;
+};
+
+/**
+ * Shop-level outlook of the plan: funded orders carry their quantity, deferred ones carry zero,
+ * so the unmet demand they add is visible as the cost of deferral. Uses the stored forecast for
+ * each product's demand rate/error — a portfolio summary, not a full re-simulation.
+ */
+async function shopOutlook(
+  plan: ReturnType<typeof allocateBudget>,
+  recByProduct: Map<string, { calculation: unknown; action: unknown }>,
+): Promise<ShopOutlook | null> {
+  const items = [
+    ...plan.funded.map((f) => ({ productId: f.productId, name: f.name, quantity: f.quantity, unitPrice: f.unitPrice })),
+    ...plan.deferred.map((d) => ({ productId: d.productId, name: d.name, quantity: 0, unitPrice: 0 })),
+  ];
+  const ids = [...new Set(items.map((i) => i.productId))];
+  if (!ids.length) return null;
+  const fcs = await db.select().from(s.forecasts).where(inArray(s.forecasts.productId, ids));
+  const fcM = new Map(fcs.map((f) => [f.productId, f]));
+  const prods: ShopSimProduct[] = [];
+  for (const item of items) {
+    const rec = recByProduct.get(item.productId);
+    const calc = rec?.calculation as Calculation | null;
+    const vin = calc?.validationInput;
+    if (!vin) continue; // no stored validation context → cannot simulate honestly; skip
+    const rate = (calc?.context as { rate?: number } | undefined)?.rate ?? fcM.get(item.productId)?.dailyRate;
+    if (rate === undefined) continue;
+    prods.push({
+      productId: item.productId,
+      name: item.name,
+      quantity: item.quantity,
+      stock: Math.max(0, vin.currentStock ?? 0),
+      dailyRate: rate,
+      dailySd: fcM.get(item.productId)?.dailySd ?? 0,
+      leadTimeDays: (rec?.action as Action | null)?.leadTimeDays ?? 7,
+      unitPrice: item.quantity > 0 ? item.unitPrice : ((rec?.action as Action | null)?.unitPrice ?? 0),
+      sellPrice: vin.sellPrice ?? null,
+    });
+  }
+  return prods.length ? simulateShop(prods, { runs: 400 }) : null;
+}
+
+/**
+ * Approve the whole-shop cash plan in one click. This is still one human approval — the owner
+ * pressed the button — but each order goes through the same decide() gate as an individual
+ * approval: quantities are re-validated against current rules right now, blocked orders are
+ * refused, and warnings are never confirmed on the owner's behalf (those are skipped and must
+ * be approved individually). Deferred orders are left pending by design.
+ */
+export async function approveFundedPlan(): Promise<BatchResult> {
+  const [recs, rules] = await Promise.all([
+    db.select().from(s.recommendations).where(eq(s.recommendations.status, "pending")),
+    loadRules(),
+  ]);
+  const candidates = recs.map(budgetCandidateOf).filter((c): c is BudgetCandidate => c !== null);
+  if (!candidates.length) return { approved: [], skipped: [], committed: 0, outlook: null };
+  const plan = allocateBudget(candidates, rules.cashLimit);
+
+  // One pending order rec per product (dedupe keys guarantee this), matched back by productId.
+  const recByProduct = new Map<string, typeof recs[number]>();
+  for (const r of recs) {
+    const c = budgetCandidateOf(r);
+    if (c && !recByProduct.has(c.productId)) recByProduct.set(c.productId, r);
+  }
+  const outlook = await shopOutlook(plan, recByProduct);
+
+  const approved: BatchResult["approved"] = [];
+  const skipped: BatchResult["skipped"] = [];
+  let committed = 0;
+  for (const f of plan.funded) {
+    const rec = recByProduct.get(f.productId);
+    if (!rec) {
+      skipped.push({ productId: f.productId, name: f.name, reason: "The pending recommendation changed while planning — approve individually." });
+      continue;
+    }
+    try {
+      // A downsized quantity is a modification of the recommendation, not a silent approval of it.
+      await decide(rec.id, {
+        decision: f.downsizedFrom ? "modified" : "approved",
+        quantity: f.quantity,
+        reason: f.downsizedFrom
+          ? `Approved at ${f.quantity} (down from ${f.downsizedFrom}) to fit the whole-shop cash limit — expected unmet demand rises by about ${f.extraLostUnits ?? "?"} unit(s) per the simulation.`
+          : "Approved as part of the funded whole-shop cash plan.",
+      });
+      approved.push({ id: rec.id, productId: f.productId, name: f.name, quantity: f.quantity, ...(f.downsizedFrom ? { downsizedFrom: f.downsizedFrom } : {}) });
+      committed += f.cost;
+    } catch (e) {
+      if (e instanceof HttpError && e.status === 409) {
+        skipped.push({ productId: f.productId, name: f.name, reason: "Needs your explicit confirmation of a warning — approve it individually." });
+      } else if (e instanceof HttpError && e.status === 422) {
+        skipped.push({ productId: f.productId, name: f.name, reason: e.message });
+      } else {
+        throw e;
+      }
+    }
+  }
+  return { approved, skipped, committed, outlook };
 }
 
 /**

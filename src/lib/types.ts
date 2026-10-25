@@ -93,6 +93,10 @@ export type RuleSet = {
   reviewPeriodDays: number;
   plausibilityMultiple: number;
   minHistoryDays: number;
+  /** Stockout-probability band cut points (%), owner-tunable. Internally kept watch ≤ high ≤ critical. */
+  riskWatchPct: number;
+  riskHighPct: number;
+  riskCriticalPct: number;
 };
 
 export const DEFAULT_RULES: RuleSet = {
@@ -105,6 +109,9 @@ export const DEFAULT_RULES: RuleSet = {
   reviewPeriodDays: 7,
   plausibilityMultiple: 3,
   minHistoryDays: 28,
+  riskWatchPct: 25,
+  riskHighPct: 60,
+  riskCriticalPct: 90,
 };
 
 export type SupplierOffer = {

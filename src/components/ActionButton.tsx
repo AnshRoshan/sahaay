@@ -12,6 +12,12 @@ const FORMAT: Record<string, (j: J) => string> = {
   outcomes: (j) => `${j.measured} measured, ${j.pending} still waiting for enough data`,
   workflow: (j) => `Workflow ${j.status}`,
   explain: (j) => (j.source === "gemma" ? "Explained by Gemma (numbers verified)" : "Explained by deterministic template (Gemma not configured or its output was rejected)"),
+  batch: (j) => {
+    const b = j as { approved: { downsizedFrom?: number }[]; skipped: unknown[]; outlook?: { expectedTotalLostUnits: number } | null };
+    const down = (b.approved ?? []).filter((a) => a.downsizedFrom).length;
+    const outlook = b.outlook ? `, ≈${b.outlook.expectedTotalLostUnits} unmet unit(s) expected shop-wide over the window` : "";
+    return `${b.approved?.length ?? 0} approved (${down} downsized to fit cash), ${b.skipped?.length ?? 0} skipped${outlook}`;
+  },
 };
 
 export default function ActionButton({
@@ -23,7 +29,7 @@ export default function ActionButton({
   variant?: "primary" | "secondary" | "ghost";
   confirm?: string;
   /** Serializable result formatter (functions cannot cross the server→client boundary). */
-  done?: "text" | "demo" | "analysis" | "simulate" | "outcomes" | "workflow" | "explain";
+  done?: "text" | "demo" | "analysis" | "simulate" | "outcomes" | "workflow" | "explain" | "batch";
   className?: string;
 }) {
   const router = useRouter();

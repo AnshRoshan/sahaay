@@ -1,5 +1,7 @@
 // Detection → Risk → Recommendation → Validation. Pure (no DB, no network).
 import { assessInputs, usableOffers } from "./guards";
+import { weekdayOf } from "./dates";
+import { weekdayFactors } from "./forecast-core";
 import { effectiveLeadDays, leadTimeStatement, type SupplierLeadTime } from "./leadtime";
 import { possibleStockoutRuns } from "./forecast-core";
 import { computeOrderQuantity, stockoutRisk, type RiskOutput } from "./risk";
@@ -220,7 +222,7 @@ export function analyzeProduct(
     dailyRate: rate,
     dailySd: fc.dailySd,
     leadTimeDays: primary.leadTimeDays,
-  });
+  }, rules);
   const lowConf = guard.flags.includes("LOW_CONFIDENCE");
   const conflict = guard.flags.includes("FLAG_CONFLICT");
   const confidence =
@@ -407,6 +409,15 @@ export function analyzeProduct(
         const c = Math.max(1, Math.round(q.quantity * step));
         if (c !== q.quantity) simCandidates.add(c);
       }
+      // Realism the owner's own data supports: weekday shapes demand; measured deliveries give
+      // the supplier-delay spread (1.4826 × MAD ≈ sd of a normal). Both degrade to the simple
+      // model when the data is absent, and the limitations text below says which happened.
+      const wFactors = weekdayFactors(f.series, weekdayOf(ctx.asOf));
+      const wKnown = wFactors.some((x) => Math.abs(x - 1) > 0.02);
+      const leadSd =
+        primary.observed && primary.observed.confidence !== "insufficient"
+          ? Math.round(primary.observed.madDays * 1.4826 * 100) / 100
+          : 0;
       const simRows = simulateDecision({
         stock: effStock,
         inbound: 0, // already folded into effStock
@@ -418,6 +429,8 @@ export function analyzeProduct(
         unitPrice: primary.price,
         sellPrice: f.sellPrice,
         reorderLevel: f.reorderLevel ?? 0,
+        ...(wKnown ? { weekdayFactors: wFactors, endWeekday: weekdayOf(ctx.asOf) } : {}),
+        ...(leadSd > 0 ? { leadTimeSd: leadSd } : {}),
         runs: SIM_RUNS,
         seed: simulationSeed(f.id),
       });
@@ -430,10 +443,14 @@ export function analyzeProduct(
         candidates: simRows.map((row) =>
           toCandidate(row, validateOrder({ ...validationInput, quantity: row.quantity }, rules).status),
         ),
-        method: `${SIM_RUNS} simulated futures per quantity. Daily demand drawn from a normal distribution (mean = forecast rate, sd = forecast error). The order lands after ${primary.leadTimeDays} days. Stockout risk counts only days after that delivery, because that is the period your order size controls; shortages during the lead time are shown separately, since no order quantity can undo a stock level that is already too low. Overstock = the horizon ended above your reorder level.`,
+        method: `${SIM_RUNS} simulated futures per quantity. Daily demand drawn from a normal distribution (mean = forecast rate${wKnown ? " × weekday pattern from your recent sales" : ""}, sd = forecast error). The order lands after ${primary.leadTimeDays} days${leadSd > 0 ? `, with delivery-day variability taken from your ${primary.observed!.n} measured delivery(ies)` : ""}. Stockout risk counts only days after that delivery, because that is the period your order size controls; shortages during the lead time are shown separately, since no order quantity can undo a stock level that is already too low. Overstock = the horizon ended above your reorder level.`,
         limitations: [
-          "Demand is simulated from a constant daily rate: weekday and festival effects are not modelled.",
-          "Supplier delay and partial deliveries are not simulated — the order arrives exactly on time.",
+          wKnown
+            ? "Weekday demand comes from your own recent sales, shrunk toward an even rate: festivals and one-off events are not modelled."
+            : "Demand is simulated from a constant daily rate: your sales do not yet show a stable weekday pattern, and festival effects are not modelled.",
+          leadSd > 0
+            ? "Delivery delay is simulated from your measured deliveries; partial deliveries and quality problems are not."
+            : "Supplier delay is not simulated — the order arrives exactly on time; record deliveries against orders to change this.",
           "Selling price is treated as fixed, so a price change or a markdown is not simulated.",
           "Stockout risk counts only the days after your new delivery arrives; shortages during the lead time are reported separately.",
           "Units lost before the new stock arrives are caused by today's stock level — no order quantity can prevent them.",

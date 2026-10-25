@@ -4,6 +4,7 @@ import RecCard from "@/components/RecCard";
 import VoiceBriefing from "@/components/VoiceBriefing";
 import { Card, EmptyState, Stat } from "@/components/ui";
 import { buildBriefing } from "@/lib/server/briefing";
+import { planLines } from "@/lib/server/plan";
 import { getDataSummary, getHistory, getNorthStar, listRecs } from "@/lib/server/data";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +44,30 @@ export default async function Home() {
         {top.length === 0 && <Card><p className="text-sm text-slate-600">All clear. Sahaay will keep monitoring and tell you when something changes.</p></Card>}
         {pending.length > 3 && <Link href="/decisions" className="block text-sm font-medium text-indigo-700 hover:underline">See all {pending.length} open items →</Link>}
       </div>
+
+      {briefing.plan && briefing.plan.deferred.length > 0 && (
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold text-slate-900">Cash plan across pending orders</h2>
+            <span className="text-sm text-slate-500">
+              ₹{briefing.plan.committed.toLocaleString("en-IN")} of ₹{briefing.plan.cashLimit.toLocaleString("en-IN")} fits
+            </span>
+          </div>
+          <ul className="mt-2 space-y-1 text-sm text-slate-700">
+            {planLines(briefing.plan).map((l, k) => <li key={k}>• {l}</li>)}
+          </ul>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <ActionButton
+              endpoint="/api/recommendations/batch"
+              confirm={`Approve the ${briefing.plan.funded.length} funded order(s) now? Each one is re-validated first; orders with warnings are skipped for individual approval. Deferred orders stay pending.`}
+              done="batch"
+            >
+              ✓ Approve the {briefing.plan.funded.length} funded order{briefing.plan.funded.length === 1 ? "" : "s"}
+            </ActionButton>
+          </div>
+          <p className="mt-3 text-xs text-slate-500">This plan is not approval on its own — approving re-validates every order against your rules right now, and each decision is recorded in your history. Deferred orders stay pending.</p>
+        </Card>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-4">
         <Stat label="Sales records" value={summary.salesRecords.toLocaleString()} hint="imported & valid" href="/import" />

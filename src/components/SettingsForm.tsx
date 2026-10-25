@@ -12,6 +12,9 @@ const FIELDS: { key: keyof RuleSet; label: string; hint: string }[] = [
   { key: "reviewPeriodDays", label: "Review period (days)", hint: "Days between your ordering cycles; added to lead time." },
   { key: "plausibilityMultiple", label: "Plausibility multiple (×)", hint: "Warn when an order exceeds this × monthly demand." },
   { key: "minHistoryDays", label: "Minimum history (days)", hint: "Below this, forecasts are flagged low-confidence." },
+  { key: "riskWatchPct", label: "Risk band: WATCH from (%)", hint: "Stockout probability where a product enters the WATCH band." },
+  { key: "riskHighPct", label: "Risk band: HIGH from (%)", hint: "Where a reorder is recommended. Kept ordered with the other bands automatically." },
+  { key: "riskCriticalPct", label: "Risk band: CRITICAL from (%)", hint: "Where a product is flagged critical." },
 ];
 
 export default function SettingsForm({ rules }: { rules: RuleSet }) {

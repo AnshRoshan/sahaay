@@ -1,5 +1,5 @@
 // Deterministic inventory risk engine. Pure.
-import type { RiskLevel } from "./types";
+import type { RuleSet, RiskLevel } from "./types";
 
 /** Standard normal CDF (Abramowitz–Stegun 7.1.26). */
 export function normalCdf(z: number): number {
@@ -24,15 +24,28 @@ export type RiskOutput = {
   shortfall: number;
 };
 
-export function levelFor(p: number, stock: number): RiskLevel {
-  if (stock <= 0 || p >= 0.9) return "CRITICAL";
-  if (p >= 0.6) return "HIGH";
-  if (p >= 0.25) return "WATCH";
+/**
+ * Band cut points, owner-tunable via business rules. Defaults match the long-standing values
+ * (25 / 60 / 90). They are clamped to 0–100 and sorted defensively, so a misconfigured rule can
+ * only move where the boundaries sit, never produce an inconsistent banding.
+ */
+export function bandsOf(rules?: Pick<RuleSet, "riskWatchPct" | "riskHighPct" | "riskCriticalPct">): [number, number, number] {
+  const w = rules?.riskWatchPct ?? 25;
+  const h = rules?.riskHighPct ?? 60;
+  const c = rules?.riskCriticalPct ?? 90;
+  return [w, h, c].map((x) => Math.min(100, Math.max(0, x)) / 100).sort((a, b) => a - b) as [number, number, number];
+}
+
+export function levelFor(p: number, stock: number, rules?: Pick<RuleSet, "riskWatchPct" | "riskHighPct" | "riskCriticalPct">): RiskLevel {
+  const [watch, high, critical] = bandsOf(rules);
+  if (stock <= 0 || p >= critical) return "CRITICAL";
+  if (p >= high) return "HIGH";
+  if (p >= watch) return "WATCH";
   return "SAFE";
 }
 
 /** P(demand during supplier lead time > available stock). */
-export function stockoutRisk(i: RiskInput): RiskOutput {
+export function stockoutRisk(i: RiskInput, rules?: Pick<RuleSet, "riskWatchPct" | "riskHighPct" | "riskCriticalPct">): RiskOutput {
   const mu = i.dailyRate * i.leadTimeDays;
   const sd = Math.max(i.dailySd * Math.sqrt(i.leadTimeDays), 0.5);
   let p: number;
@@ -42,7 +55,7 @@ export function stockoutRisk(i: RiskInput): RiskOutput {
   p = Math.round(Math.min(1, Math.max(0, p)) * 100) / 100;
   return {
     probability: p,
-    level: levelFor(p, i.stock),
+    level: levelFor(p, i.stock, rules),
     daysOfCover: i.dailyRate > 0 ? Math.round((i.stock / i.dailyRate) * 10) / 10 : null,
     demandDuringLead: Math.round(mu * 10) / 10,
     shortfall: Math.max(0, Math.ceil(mu - i.stock)),
